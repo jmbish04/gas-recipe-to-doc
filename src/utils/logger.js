@@ -31,7 +31,7 @@ function logExport(recipeData, docUrl) {
  */
 function getHistory() {
   // Open the centralized logging spreadsheet via the Drive ID. (Hardcoded per requirement)
-  const ss = SpreadsheetApp.openById('15OZdqdenNGVASN_EjygVuQkpL6ldO_Lk-hDon7aszw4');
+  const ss = SpreadsheetApp.openById(CONFIG.LOG_SHEET_ID);
 
   // Resolve the specific telemetry worksheet.
   const sheet = ss.getSheetByName(CONFIG.HISTORY_SHEET_NAME);
