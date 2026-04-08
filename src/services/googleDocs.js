@@ -17,7 +17,7 @@ function createRecipeDoc(recipe) {
   const CF_ACCOUNT_ID = props.getProperty('CLOUDFLARE_ACCOUNT_ID');
 
   const templateFile = DriveApp.getFileById(CONFIG.TEMPLATE_ID);
-  const folder = DriveApp.getFolderById('1E0Mw2uZovNIJxFJ76chDzbrNyGef8jKJ');
+  const folder = DriveApp.getFolderById(CONFIG.FOLDER_ID);
 
   // 2. Document Initialization
   const newFile = templateFile.makeCopy('Recipe: ' + recipe.title, folder);
