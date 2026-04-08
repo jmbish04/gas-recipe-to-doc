@@ -48,6 +48,11 @@ jobs:
             echo "✅ Service Account path exported to ENV."
           fi
 
+      - name: Validate clasp credentials file exists
+        run: |
+          ls -la $HOME/.clasprc.json
+          node -e "JSON.parse(require('fs').readFileSync(process.env.HOME+'/.clasprc.json','utf8')); console.log('~/.clasprc.json parses')"
+
       - name: Verify Clasp Login
         run: npx clasp login --status
 
