@@ -33,29 +33,28 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Normalize & Inject Credentials
+      - name: Normalize & Heal Credentials
         env:
+          # The | ensures newlines and quotes are preserved
           CLASPRC_JSON_RAW: |
             ${{ secrets.CLASPRC_JSON }}
         run: python scripts/setup_clasp.py
 
-      - name: Setup Service Account Environment
-        # Only needed if using the Service Account mode
+      - name: Setup Application Default Credentials
+        # Fallback for Service Accounts
         run: |
-          if grep -q "service_account" .clasprc.json; then
-            echo "GOOGLE_APPLICATION_CREDENTIALS=$PWD/.clasprc.json" >> $GITHUB_ENV
+          if [ -f "service_account.json" ]; then
+            echo "GOOGLE_APPLICATION_CREDENTIALS=$PWD/service_account.json" >> $GITHUB_ENV
+            echo "✅ Service Account path exported to ENV."
           fi
 
-      - name: Verify Clasp Session
-        run: npx clasp login --status
-
-      - name: Verify Clasp
+      - name: Verify Clasp Login
         run: npx clasp login --status
 
       - name: Push to Apps Script
         run: npm run push
 
-      - name: Create Deployment
+      - name: Create New Deployment
         if: |
           github.event_name == 'push' || 
           (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_type == 'push_and_deploy')
