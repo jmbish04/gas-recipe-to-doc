@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Recipe Assistant</title>
+
+  <!-- Tailwind CSS Play CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            border: '#27272a',
+            input: '#27272a',
+            ring: '#52525b',
+            background: '#09090b',
+            foreground: '#fafafa',
+            card: { DEFAULT: '#18181b', foreground: '#fafafa' },
+            muted: { DEFAULT: '#27272a', foreground: '#a1a1aa' },
+            accent: { DEFAULT: '#27272a', foreground: '#fafafa' }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { height: 100%; }
+    body { background-color: #09090b; color: #fafafa; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 9999px; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .animate-spin { animation: spin 0.8s linear infinite; }
+
+    @keyframes fadeSlideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeSlideUp 0.25s ease-out; }
+
+    textarea { field-sizing: content; }
+  </style>
+</head>
+
+<body class="dark">
+  <div id="root"></div>
+
+  <!-- React 18 UMD -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- Babel Standalone for JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel" data-presets="react">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    // ─── google.script.run Promise wrapper ───────────────────────────────────
+    const runScript = (fnName, ...args) =>
+      new Promise((resolve, reject) => {
+        if (typeof google === 'undefined' || !google.script) {
+          reject(new Error('Not running in Google Apps Script context'));
+          return;
+        }
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject)
+          [fnName](...args);
+      });
+
+    // ─── SVG Icons ────────────────────────────────────────────────────────────
+    const SendIcon = () => (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+    );
+
+    const SpinnerIcon = ({ size = 16 }) => (
+      <svg className="animate-spin" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+      </svg>
+    );
+
+    const ChefHatIcon = ({ size = 20 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z"/>
+        <line x1="6" y1="17" x2="18" y2="17"/>
+      </svg>
+    );
+
+    const ExternalLinkIcon = () => (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+        <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+      </svg>
+    );
+
+    const HistoryIcon = () => (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="12 8 12 12 14 14"/>
+        <path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5"/>
+      </svg>
+    );
+
+    const ChatIcon = () => (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
+    );
+
+    const DocIcon = () => (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+      </svg>
+    );
+
+    // ─── RecipeCard Component ─────────────────────────────────────────────────
+    function RecipeCard({ recipe }) {
+      const [exporting, setExporting] = useState(false);
+      const [exported, setExported] = useState(null);
+      const [exportError, setExportError] = useState(null);
+
+      const handleExport = async () => {
+        setExporting(true);
+        setExportError(null);
+        try {
+          const json = await runScript('createRecipeDoc', recipe);
+          setExported(JSON.parse(json));
+        } catch (err) {
+          setExportError(err.message || 'Export failed. Please try again.');
+        } finally {
+          setExporting(false);
+        }
+      };
+
+      return (
+        <div className="fade-in rounded-xl border border-zinc-700/50 overflow-hidden bg-zinc-900 w-full max-w-lg">
+          {/* Card header */}
+          <div className="bg-gradient-to-br from-emerald-900 to-emerald-800 px-5 py-4">
+            <p className="text-xs font-semibold text-emerald-300 uppercase tracking-widest mb-1">Recipe</p>
+            <h3 className="text-lg font-bold text-white leading-snug">{recipe.title}</h3>
+            {recipe.description && (
+              <p className="text-sm text-emerald-100/80 mt-1">{recipe.description}</p>
+            )}
+          </div>
+
+          {/* Stats row */}
+          <div className="grid grid-cols-3 divide-x divide-zinc-700/50 border-b border-zinc-700/50">
+            {[
+              { label: 'Prep', value: recipe.prepTime },
+              { label: 'Cook', value: recipe.cookTime },
+              { label: 'Serves', value: recipe.servings }
+            ].map(({ label, value }) => (
+              <div key={label} className="py-3 text-center">
+                <p className="text-xs text-zinc-400 uppercase tracking-wide">{label}</p>
+                <p className="text-sm font-semibold text-zinc-100 mt-0.5">{value || 'N/A'}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Ingredients & Instructions */}
+          <div className="p-5 space-y-5">
+            {recipe.ingredients && recipe.ingredients.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2.5">Ingredients</h4>
+                <ul className="space-y-1.5">
+                  {recipe.ingredients.map((ing, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-zinc-200">
+                      <span className="text-emerald-400 flex-shrink-0 mt-px">•</span>
+                      <span>{ing}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {recipe.instructions && recipe.instructions.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2.5">Instructions</h4>
+                <ol className="space-y-2.5">
+                  {recipe.instructions.map((step, i) => (
+                    <li key={i} className="flex items-start gap-3 text-sm text-zinc-200">
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-900 text-emerald-300 text-xs font-bold flex items-center justify-center">{i + 1}</span>
+                      <span className="leading-relaxed pt-px">{step.replace(/^\d+\.\s*/, '')}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            {/* Export action */}
+            <div className="pt-1 border-t border-zinc-700/50">
+              {exported ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-emerald-400 font-medium">✓ Exported to Google Docs</span>
+                  <a
+                    href={exported.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white transition-colors"
+                  >
+                    Open Doc <ExternalLinkIcon />
+                  </a>
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={handleExport}
+                    disabled={exporting}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+                  >
+                    {exporting ? (
+                      <><SpinnerIcon size={14} /> Exporting…</>
+                    ) : (
+                      <><DocIcon /> Export to Google Doc</>
+                    )}
+                  </button>
+                  {exportError && <p className="text-xs text-red-400 mt-2 text-center">{exportError}</p>}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── MessageBubble Component ──────────────────────────────────────────────
+    function MessageBubble({ message }) {
+      const isUser = message.role === 'user';
+
+      if (message.type === 'recipe' && message.recipe) {
+        return (
+          <div className="flex justify-start mb-4 fade-in">
+            <div className="flex flex-col gap-2 max-w-[92%] w-full">
+              {message.content && (
+                <div className="self-start px-4 py-2.5 rounded-2xl rounded-tl-sm bg-zinc-800 text-zinc-100 text-sm max-w-prose">
+                  {message.content}
+                </div>
+              )}
+              <RecipeCard recipe={message.recipe} />
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3 fade-in`}>
+          <div className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+            isUser
+              ? 'bg-zinc-100 text-zinc-900 rounded-tr-sm'
+              : message.type === 'error'
+                ? 'bg-red-950 text-red-300 rounded-tl-sm border border-red-900'
+                : 'bg-zinc-800 text-zinc-100 rounded-tl-sm'
+          }`}>
+            {message.content}
+          </div>
+        </div>
+      );
+    }
+
+    // ─── HistoryView Component ────────────────────────────────────────────────
+    function HistoryView({ onSelectSearch }) {
+      const [history, setHistory] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
+
+      useEffect(() => {
+        setLoading(true);
+        runScript('getHistory')
+          .then(json => setHistory(JSON.parse(json)))
+          .catch(err => setError(err.message || 'Failed to load history'))
+          .finally(() => setLoading(false));
+      }, []);
+
+      const formatDate = iso => {
+        try { return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); }
+        catch (_) { return iso; }
+      };
+
+      if (loading) {
+        return (
+          <div className="flex items-center justify-center h-48 gap-2 text-zinc-400 text-sm">
+            <SpinnerIcon size={16} /><span>Loading history…</span>
+          </div>
+        );
+      }
+
+      if (error) {
+        return (
+          <div className="flex items-center justify-center h-48 text-red-400 text-sm px-4 text-center">
+            {error}
+          </div>
+        );
+      }
+
+      if (history.length === 0) {
+        return (
+          <div className="flex flex-col items-center justify-center h-48 text-zinc-500 gap-3">
+            <HistoryIcon />
+            <p className="text-sm">No history yet — start chatting!</p>
+          </div>
+        );
+      }
+
+      return (
+        <div className="overflow-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b border-zinc-700/50">
+                <th className="text-left py-3 px-4 text-xs font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap">Date</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-zinc-400 uppercase tracking-wider">Type</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-zinc-400 uppercase tracking-wider">Name / Query</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-zinc-400 uppercase tracking-wider">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.map((item, i) => (
+                <tr key={i} className="border-b border-zinc-800/60 hover:bg-zinc-800/30 transition-colors">
+                  <td className="py-3 px-4 text-zinc-400 whitespace-nowrap text-xs">{formatDate(item.timestamp)}</td>
+                  <td className="py-3 px-4">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                      item.type === 'export'
+                        ? 'bg-emerald-900/60 text-emerald-400 border border-emerald-800'
+                        : 'bg-zinc-700/60 text-zinc-300 border border-zinc-600'
+                    }`}>
+                      {item.type}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-zinc-200 max-w-xs">
+                    <span className="block truncate" title={item.name}>{item.name}</span>
+                  </td>
+                  <td className="py-3 px-4">
+                    {item.type === 'export' && item.url ? (
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                      >
+                        Open Doc <ExternalLinkIcon />
+                      </a>
+                    ) : item.type === 'search' ? (
+                      <button
+                        onClick={() => onSelectSearch(item.name)}
+                        className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+                      >
+                        Repeat →
+                      </button>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    // ─── ChatView Component ───────────────────────────────────────────────────
+    const SUGGESTIONS = ['Spaghetti Carbonara', 'Chicken Tikka Masala', 'Avocado Toast', 'Chocolate Lava Cake'];
+
+    function ChatView({ messages, loading, onSend, inputValue, setInputValue }) {
+      const bottomRef = useRef(null);
+      const textareaRef = useRef(null);
+
+      useEffect(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, [messages, loading]);
+
+      const handleKeyDown = e => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          if (inputValue.trim() && !loading) onSend();
+        }
+      };
+
+      return (
+        <>
+          {/* Messages area */}
+          <div className="flex-1 overflow-y-auto px-4 py-4 scroll-smooth">
+            {messages.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-full text-zinc-400 py-16 gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-900/50 border border-emerald-800/50 flex items-center justify-center">
+                  <ChefHatIcon size={24} />
+                </div>
+                <div className="text-center">
+                  <h2 className="text-base font-semibold text-zinc-200 mb-1">Recipe Assistant</h2>
+                  <p className="text-sm max-w-xs text-zinc-400">Ask for any recipe and I'll generate it — then export it straight to Google Docs.</p>
+                </div>
+                <div className="flex flex-wrap gap-2 justify-center mt-2">
+                  {SUGGESTIONS.map(s => (
+                    <button
+                      key={s}
+                      onClick={() => { setInputValue(s); textareaRef.current?.focus(); }}
+                      className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 border border-zinc-700 transition-colors"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {messages.map(msg => <MessageBubble key={msg.id} message={msg} />)}
+
+            {loading && (
+              <div className="flex justify-start mb-3">
+                <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl rounded-tl-sm bg-zinc-800 text-zinc-400 text-sm">
+                  <SpinnerIcon size={14} /><span>Thinking…</span>
+                </div>
+              </div>
+            )}
+
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Input area */}
+          <div className="border-t border-zinc-800 p-3">
+            <div className="flex items-end gap-2 bg-zinc-800 rounded-2xl px-4 py-2.5 ring-1 ring-transparent focus-within:ring-zinc-600 transition-all">
+              <textarea
+                ref={textareaRef}
+                value={inputValue}
+                onChange={e => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Ask for a recipe…"
+                rows={1}
+                disabled={loading}
+                className="flex-1 bg-transparent text-zinc-100 placeholder-zinc-500 text-sm outline-none resize-none disabled:opacity-50 min-h-[24px] max-h-[120px] overflow-y-auto leading-relaxed"
+              />
+              <button
+                onClick={onSend}
+                disabled={!inputValue.trim() || loading}
+                className="flex-shrink-0 w-8 h-8 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white flex items-center justify-center transition-colors"
+                aria-label="Send"
+              >
+                <SendIcon />
+              </button>
+            </div>
+            <p className="text-xs text-zinc-600 text-center mt-1.5">Enter to send · Shift+Enter for new line</p>
+          </div>
+        </>
+      );
+    }
+
+    // ─── App (Root) Component ─────────────────────────────────────────────────
+    function App() {
+      const [view, setView] = useState('chat');
+      const [messages, setMessages] = useState([]);
+      const [loading, setLoading] = useState(false);
+      const [inputValue, setInputValue] = useState('');
+
+      const addMessage = useCallback(msg => {
+        setMessages(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, ...msg }]);
+      }, []);
+
+      const sendMessage = useCallback(async () => {
+        const text = inputValue.trim();
+        if (!text || loading) return;
+
+        setInputValue('');
+        addMessage({ role: 'user', type: 'text', content: text });
+        setLoading(true);
+
+        try {
+          // Build clean message history for the AI
+          const aiMessages = [...messages, { role: 'user', content: text }]
+            .filter(m => m.type !== 'error')
+            .map(m => ({ role: m.role, content: m.content }));
+
+          const responseJson = await runScript('chatWithAI', aiMessages);
+          const response = JSON.parse(responseJson);
+
+          if (response.type === 'recipe' && response.recipe) {
+            addMessage({ role: 'assistant', type: 'recipe', content: response.message, recipe: response.recipe });
+          } else {
+            addMessage({ role: 'assistant', type: 'text', content: response.message || String(response) });
+          }
+        } catch (err) {
+          addMessage({ role: 'assistant', type: 'error', content: err.message || 'Something went wrong. Please try again.' });
+        } finally {
+          setLoading(false);
+        }
+      }, [inputValue, loading, messages, addMessage]);
+
+      // When user clicks "Repeat search" in history — switch to chat and pre-fill input
+      const handleSelectSearch = useCallback(query => {
+        setView('chat');
+        setInputValue(query);
+      }, []);
+
+      return (
+        <div className="flex flex-col h-full bg-zinc-950 text-zinc-100">
+          {/* ── Header ── */}
+          <header className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/70 backdrop-blur-sm shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-emerald-700 flex items-center justify-center shrink-0">
+                <ChefHatIcon size={18} />
+              </div>
+              <div>
+                <h1 className="text-sm font-semibold text-zinc-100 leading-none">Recipe Assistant</h1>
+                <p className="text-xs text-zinc-400 mt-0.5">Powered by AI · Exports to Google Docs</p>
+              </div>
+            </div>
+
+            {/* Tab navigation */}
+            <nav className="flex items-center gap-1 bg-zinc-800 rounded-xl p-1">
+              {[
+                { id: 'chat', label: 'Chat', icon: <ChatIcon /> },
+                { id: 'history', label: 'History', icon: <HistoryIcon /> }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setView(tab.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    view === tab.id
+                      ? 'bg-zinc-700 text-zinc-100 shadow-sm'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  {tab.icon} {tab.label}
+                </button>
+              ))}
+            </nav>
+          </header>
+
+          {/* ── Main ── */}
+          <main className="flex-1 flex flex-col overflow-hidden">
+            {view === 'chat' ? (
+              <ChatView
+                messages={messages}
+                loading={loading}
+                onSend={sendMessage}
+                inputValue={inputValue}
+                setInputValue={setInputValue}
+              />
+            ) : (
+              <div className="flex-1 flex flex-col overflow-hidden p-4 gap-3">
+                <h2 className="text-sm font-semibold text-zinc-300 shrink-0">Search &amp; Export History</h2>
+                <div className="flex-1 overflow-auto rounded-xl border border-zinc-800 bg-zinc-900">
+                  <HistoryView onSelectSearch={handleSelectSearch} />
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+      );
+    }
+
+    // ─── Mount ────────────────────────────────────────────────────────────────
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
