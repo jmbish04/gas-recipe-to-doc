@@ -23,11 +23,11 @@ const SEARCH_CX = scriptProps.getProperty('SEARCH_CX') || 'YOUR_SEARCH_CX';
 // Define the core application configuration, locking down structural IDs and API endpoints.
 const CONFIG = {
   // Google Drive template ID for the recipe document.
-  TEMPLATE_ID: '13LXhg3sBiPHcOhLM25wJuIREK1MzIReNu4BwrEXGdPU',
+  TEMPLATE_ID: scriptProps.getProperty('TEMPLATE_ID') || '13LXhg3sBiPHcOhLM25wJuIREK1MzIReNu4BwrEXGdPU',
   // Target Google Drive folder ID where newly generated recipes will be stored.
-  FOLDER_ID: '1E0Mw2uZovNIJxFJ76chDzbrNyGef8jKJ',
+  FOLDER_ID: scriptProps.getProperty('FOLDER_ID') || '1E0Mw2uZovNIJxFJ76chDzbrNyGef8jKJ',
   // Google Sheet ID used for system logging, auditing, and analytics.
-  LOG_SHEET_ID: '15OZdqdenNGVASN_EjygVuQkpL6ldO_Lk-hDon7aszw4',
+  LOG_SHEET_ID: scriptProps.getProperty('LOG_SHEET_ID') || '15OZdqdenNGVASN_EjygVuQkpL6ldO_Lk-hDon7aszw4',
 
   // Inject the retrieved Search API Key into the active configuration.
   SEARCH_API_KEY: SEARCH_API_KEY,
