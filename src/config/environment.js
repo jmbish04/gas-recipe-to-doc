@@ -40,7 +40,7 @@ const CONFIG = {
   CLOUDFLARE_AI_GATEWAY_KEY: CF_AIG_TOKEN,
 
   // Define the designated Agent LLM. Using the OpenAI interface structure for guaranteed tool calling compliance.
-  AI_MODEL: 'openai/gpt-4o-mini',
+  AI_MODEL: scriptProps.getProperty('AI_MODEL_NAME') || 'openai/gpt-4o-mini',
 
   // Define the target worksheet name within the logging spreadsheet.
   HISTORY_SHEET_NAME: 'History'

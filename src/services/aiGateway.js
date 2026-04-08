@@ -152,6 +152,11 @@ function executeAgentLoop(messages, depth = 0) {
     return executeAgentLoop(messages, depth + 1);
   }
 
-  // If no tools were called, the schema is satisfied. Return the raw stringified JSON content.
-  return message.content;
+  // Ensure we always return valid JSON to the client
+  try {
+    JSON.parse(message.content);
+    return message.content;
+  } catch (_) {
+    return JSON.stringify({ message: message.content || "", options: [], doc_url: "" });
+  }
 }
