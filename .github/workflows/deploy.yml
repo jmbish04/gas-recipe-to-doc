@@ -1,29 +1,49 @@
-name: Deploy to Google Apps Script
+name: Deploy Apps Script
 
 on:
   push:
     branches:
       - main
+  # Enables manual "on-demand" triggering
+  workflow_dispatch:
+    inputs:
+      deploy_type:
+        description: 'Choose deployment action'
+        required: true
+        default: 'push_only'
+        type: choice
+        options:
+          - push_only
+          - push_and_deploy
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
+          cache: 'npm'
 
       - name: Install Dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Create ~/.clasprc.json
+      - name: Configure Clasp Authentication
         run: |
           echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
 
-      - name: Deploy Script
+      - name: Push to Apps Script
+        # Always push the latest code
+        run: npm run push
+
+      - name: Create New Deployment
+        # Run deployment only if triggered manually with 'push_and_deploy' or on main branch push
+        if: |
+          github.event_name == 'push' || 
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_type == 'push_and_deploy')
         run: npm run deploy
