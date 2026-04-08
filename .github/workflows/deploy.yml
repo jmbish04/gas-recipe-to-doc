@@ -33,11 +33,21 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Normalize Credentials
+      - name: Normalize & Inject Credentials
         env:
-          # This is the safest way to pass secrets to a script
-          CLASPRC_JSON_RAW: ${{ secrets.CLASPRC_JSON }}
+          CLASPRC_JSON_RAW: |
+            ${{ secrets.CLASPRC_JSON }}
         run: python scripts/setup_clasp.py
+
+      - name: Setup Service Account Environment
+        # Only needed if using the Service Account mode
+        run: |
+          if grep -q "service_account" .clasprc.json; then
+            echo "GOOGLE_APPLICATION_CREDENTIALS=$PWD/.clasprc.json" >> $GITHUB_ENV
+          fi
+
+      - name: Verify Clasp Session
+        run: npx clasp login --status
 
       - name: Verify Clasp
         run: npx clasp login --status
