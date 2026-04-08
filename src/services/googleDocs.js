@@ -1,8 +1,8 @@
 /**
- * @fileoverview Google Docs Actuation Service
+ * @fileoverview Google Docs Actuation Service (Cloudflare Enhanced)
  * @module services/googleDocs
  * @description Handles the instantiation, templating, and formatting of Google Documents.
- * Maps structured AI payloads directly into a finalized, stylized artifact.
+ * Integrates Cloudflare Images for media persistence and optimization.
  */
 
 /**
@@ -11,98 +11,89 @@
  * @returns {string} JSON stringified object containing the newly created {docId, url}.
  */
 function createRecipeDoc(recipe) {
-  // Retrieve the master template file via the Drive API.
-  const templateFile = DriveApp.getFileById(CONFIG.TEMPLATE_ID);
+  // 1. Fetch Configuration and Secrets
+  const props = PropertiesService.getScriptProperties();
+  const CF_TOKEN = props.getProperty('CLOUDFLARE_IMAGES_STREAM_TOKEN');
+  const CF_ACCOUNT_ID = props.getProperty('CLOUDFLARE_ACCOUNT_ID');
 
-  // Retrieve the target destination folder.
+  const templateFile = DriveApp.getFileById(CONFIG.TEMPLATE_ID);
   const folder = DriveApp.getFolderById(CONFIG.FOLDER_ID);
 
-  // Clone the template into the target folder, assigning a dynamic title.
+  // 2. Document Initialization
   const newFile = templateFile.makeCopy('Recipe: ' + recipe.title, folder);
-
-  // Open the newly cloned document to begin text manipulation.
   const doc = DocumentApp.openById(newFile.getId());
-
-  // Extract the mutable body element from the document.
   const body = doc.getBody();
 
-  // Execute string replacements across the document body for standard metadata fields.
-  // Use toUpperCase() for the title to enforce strict styling constraints.
+  // 3. Text Replacements
   body.replaceText('{{TITLE}}', (recipe.title || '').toUpperCase());
   body.replaceText('{{DESCRIPTION}}', recipe.description || 'A delicious home-cooked meal.');
   body.replaceText('{{COOK_TIME}}', recipe.cookTime || 'N/A');
   body.replaceText('{{PREP_TIME}}', recipe.prepTime || 'N/A');
   body.replaceText('{{SERVINGS}}', recipe.servings || '1-2');
 
-  // Format the ingredients array into a bulleted string list.
   const ingredientsText = (recipe.ingredients || []).map(function(item) { return '\u2022 ' + item; }).join('\n');
   body.replaceText('{{INGREDIENTS}}', ingredientsText);
 
-  // Format the instructions array into a numbered string list with double spacing for readability.
   const instructionsText = (recipe.instructions || []).map(function(step, i) { return (i + 1) + '. ' + step; }).join('\n\n');
   body.replaceText('{{INSTRUCTIONS}}', instructionsText);
 
-  // Extract the image URL provided by the AI's parameter payload.
-  const imageUrl = recipe.imageUrl;
+  // 4. Persistent Image Actuation via Cloudflare
+  let finalImageUrl = recipe.imageUrl;
 
-  // Conditionally process image insertion if a valid URL was supplied.
-  if (imageUrl && imageUrl.trim() !== '') {
+  if (finalImageUrl && finalImageUrl.trim() !== '') {
     try {
-      // Fetch the raw image blob data from the external URL.
-      const resp = UrlFetchApp.fetch(imageUrl);
+      // Step A: Ingest into Cloudflare Images for persistence (AI URLs expire)
+      const cfApiUrl = 'https://api.cloudflare.com/client/v4/accounts/' + CF_ACCOUNT_ID + '/images/v1';
+      const uploadResponse = UrlFetchApp.fetch(cfApiUrl, {
+        method: 'post',
+        headers: { 'Authorization': 'Bearer ' + CF_TOKEN },
+        payload: {
+          url: finalImageUrl,
+          metadata: JSON.stringify({ recipeTitle: recipe.title, source: 'AI_AGENT' })
+        }
+      });
+
+      const uploadResult = JSON.parse(uploadResponse.getContentText());
+
+      if (uploadResult.success) {
+        // Use the 'public' variant or the first available variant
+        finalImageUrl = uploadResult.result.variants[0];
+      }
+
+      // Step B: Fetch the blob from the persistent Cloudflare URL
+      const resp = UrlFetchApp.fetch(finalImageUrl);
       const blob = resp.getBlob();
 
-      // Locate the image placeholder string within the document.
       const placeholder = body.findText('{{IMAGE}}');
-
-      // If the placeholder exists, replace it with the actual inline image.
       if (placeholder) {
-        // Traverse the DOM to find the paragraph element housing the placeholder text.
         const element = placeholder.getElement();
         const parent = element.getParent();
-
-        // Insert the image blob at the beginning of the paragraph.
         const img = parent.asParagraph().insertInlineImage(0, blob);
 
-        // Calculate and enforce a standardized width of 450px while maintaining the original aspect ratio.
+        // Standardized width of 450px with safe aspect ratio calculation
         const width = 450;
+        const originalWidth = img.getWidth() || 1; // Prevent division by zero
+        const height = Math.round((img.getHeight() / originalWidth) * width);
 
-        // Guard against invalid width dimensions from Blob to avoid divide by zero errors and 0 height crashes.
-        let height = 450; // Fallback default 1:1 aspect ratio height
-        const originalWidth = img.getWidth();
-        const originalHeight = img.getHeight();
-
-        if (originalWidth > 0 && originalHeight > 0) {
-           height = Math.round((originalHeight / originalWidth) * width);
-           // extra guard to ensure calculated height does not end up as 0 due to rounding
-           if (height <= 0) height = width;
-        }
-
-        img.setWidth(width).setHeight(height);
-
-        // Strip out the original placeholder text string.
+        img.setWidth(width).setHeight(Math.max(height, 1));
         element.asText().setText('');
       }
     } catch (imgErr) {
-      // Log external image fetching failures gracefully without crashing the document generation.
-      console.warn('Failed to insert image: ' + imgErr.message);
-      // Replace the placeholder with a fallback string so the UI doesn't look broken.
-      body.replaceText('{{IMAGE}}', '[Image unavailable]');
+      console.warn('Cloudflare Image Ingestion Failed: ' + imgErr.message);
+      body.replaceText('{{IMAGE}}', '[Image persistence failed: ' + imgErr.message + ']');
     }
   } else {
-    // If no URL was provided, strip the placeholder entirely to maintain clean formatting.
     body.replaceText('{{IMAGE}}', '');
   }
 
-  // Force a save and close operation to ensure all text replacements are flushed to Drive.
+  // 5. Finalize Document
   doc.saveAndClose();
-
-  // Construct the final public edit URL for the newly minted document.
   const docUrl = 'https://docs.google.com/document/d/' + newFile.getId() + '/edit';
 
-  // Trigger an asynchronous logging event to record the successful actuation.
-  logExport(recipe, docUrl);
+  // Trigger logging (ensure logExport is defined in your environment)
+  if (typeof logExport === 'function') {
+    logExport(recipe, docUrl);
+  }
 
-  // Return the standardized JSON payload required by the upstream execution loop and frontend.
   return JSON.stringify({ docId: newFile.getId(), url: docUrl });
 }
