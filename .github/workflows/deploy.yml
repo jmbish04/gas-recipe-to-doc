@@ -2,65 +2,43 @@ name: Deploy Apps Script
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
-    inputs:
-      deploy_type:
-        description: 'Action'
-        required: true
-        default: 'push_only'
-        type: choice
-        options: [push_only, push_and_deploy]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '20' # Using LTS for better stability with clasp
           cache: 'npm'
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       - name: Install Dependencies
-        run: npm ci
+        run: npm install -g @google/clasp
 
-      - name: Normalize & Heal Credentials
+      - name: Inject and Flatten Clasp Auth
+        run: |
+          echo "$RAW_JSON" | jq '{
+            token: .tokens.default,
+            oauth2ClientSettings: {
+              clientId: .tokens.default.client_id,
+              clientSecret: .tokens.default.client_secret,
+              redirectUri: "http://localhost"
+            },
+            isLocalCreds: false
+          }' > ~/.clasprc.json
         env:
-          # The | ensures newlines and quotes are preserved
-          CLASPRC_JSON_RAW: |
-            ${{ secrets.CLASPRC_JSON }}
-        run: python scripts/setup_clasp.py
-
-      - name: Setup Application Default Credentials
-        # Fallback for Service Accounts
-        run: |
-          if [ -f "service_account.json" ]; then
-            echo "GOOGLE_APPLICATION_CREDENTIALS=$PWD/service_account.json" >> $GITHUB_ENV
-            echo "✅ Service Account path exported to ENV."
-          fi
-
-      - name: Validate clasp credentials file exists
-        run: |
-          ls -la $HOME/.clasprc.json
-          node -e "JSON.parse(require('fs').readFileSync(process.env.HOME+'/.clasprc.json','utf8')); console.log('~/.clasprc.json parses')"
-
-      - name: Verify Clasp Login
-        run: npx clasp login --status
+          RAW_JSON: ${{ secrets.CLASPRC_JSON }}
 
       - name: Push to Apps Script
-        run: npm run push
+        run: clasp push -f
 
-      - name: Create New Deployment
-        if: |
-          github.event_name == 'push' || 
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_type == 'push_and_deploy')
-        run: npm run deploy
+      - name: Deploy Version
+        run: |
+          clasp deploy --description "Deployed via GitHub Actions $(date +'%Y-%m-%d %H:%M')"
