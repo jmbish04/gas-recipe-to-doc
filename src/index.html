@@ -185,7 +185,7 @@
                   {recipe.instructions.map((step, i) => (
                     <li key={i} className="flex items-start gap-3 text-sm text-zinc-200">
                       <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-900 text-emerald-300 text-xs font-bold flex items-center justify-center">{i + 1}</span>
-                      <span className="leading-relaxed pt-px">{step.replace(/^\d+\.\s*/, '')}</span>
+                      <span className="leading-relaxed pt-px">{step.replace(/^(Step\s*\d+[:.]\s*|\d+[:.]\s*)/i, '')}</span>
                     </li>
                   ))}
                 </ol>
