@@ -1,4 +1,3 @@
-```javascript
 /**
  * RECIPE EXPORTER WEB APP
  * Endpoint: doPost(e)
@@ -141,4 +140,3 @@ function doGet(e) {
   })).setMimeType(ContentService.MimeType.JSON);
 }
 
-```
