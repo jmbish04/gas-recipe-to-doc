@@ -1,0 +1,38 @@
+name: Deploy Apps Script
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Inject Clasp Auth
+        run: |
+          echo "$CLASPRC_JSON" > ~/.clasprc.json
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+
+      - name: Push to Apps Script
+        run: npx @google/clasp push -f
+
+      - name: Deploy Version
+        run: |
+          # Automatically create a new version and deploy
+          # Replace [DEPLOYMENT_ID] with your actual deployment ID if not using @latest
+          npx @google/clasp deploy --description "Deployed via GitHub Actions $(date +'%Y-%m-%d %H:%M')"
