@@ -4,7 +4,7 @@
   "description": "Google Apps Script project managed with clasp",
   "scripts": {
     "lint": "eslint src/**/*.ts",
-    "push": "clasp push -f",    
+    "push": "clasp push -f",
     "deploy": "npm run push && clasp deploy -d \"Auto-deployment from GitHub\""
   },
   "devDependencies": {

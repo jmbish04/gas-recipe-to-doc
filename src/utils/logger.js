@@ -30,8 +30,8 @@ function logExport(recipeData, docUrl) {
  * @returns {string} A JSON serialized array of normalized history objects, sorted newest-first.
  */
 function getHistory() {
-  // Open the centralized logging spreadsheet via the Drive ID.
-  const ss = SpreadsheetApp.openById(CONFIG.LOG_SHEET_ID);
+  // Open the centralized logging spreadsheet via the Drive ID. (Hardcoded per requirement)
+  const ss = SpreadsheetApp.openById('15OZdqdenNGVASN_EjygVuQkpL6ldO_Lk-hDon7aszw4');
 
   // Resolve the specific telemetry worksheet.
   const sheet = ss.getSheetByName(CONFIG.HISTORY_SHEET_NAME);
@@ -75,8 +75,8 @@ function getHistory() {
  */
 function _logToSheet_(type, name, details, url) {
   try {
-    // Open the master logging spreadsheet.
-    const ss = SpreadsheetApp.openById(CONFIG.LOG_SHEET_ID);
+    // Open the master logging spreadsheet. (Hardcoded per requirement)
+    const ss = SpreadsheetApp.openById('15OZdqdenNGVASN_EjygVuQkpL6ldO_Lk-hDon7aszw4');
 
     // Attempt to resolve the specific worksheet.
     let sheet = ss.getSheetByName(CONFIG.HISTORY_SHEET_NAME);

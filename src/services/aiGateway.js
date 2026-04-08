@@ -40,6 +40,25 @@ const TOOL_DISPATCHER = {
   'create_recipe_doc': function(args) {
     const docRes = JSON.parse(createRecipeDoc(args));
     return "Document created successfully: " + docRes.url;
+  },
+  'propose_recipes': function(args) {
+    // Intercept this tool to generate the final response with images,
+    // thereby bypassing further agent loops.
+    const enrichedRecipes = (args.recipes || []).map(function(recipe) {
+      // Find image for each proposed recipe.
+      recipe.imageUrl = findRecipeImage(recipe.title) || "";
+      return recipe;
+    });
+
+    // We want to stop the loop and return this directly to the frontend.
+    // By throwing a specific error containing our payload, we can catch it.
+    const finalPayload = {
+      message: "Here are some options I found for you.",
+      proposals: enrichedRecipes,
+      doc_url: ""
+    };
+
+    throw new Error('__PROPOSE_RECIPES_INTERCEPT__:' + JSON.stringify(finalPayload));
   }
 };
 
@@ -120,33 +139,43 @@ function executeAgentLoop(messages, depth = 0) {
     });
 
     // 2. Iterate over each requested tool call and execute the corresponding localized function.
-    message.tool_calls.forEach(function(toolCall) {
-      let resultContent = "";
-      try {
-        // Parse the stringified JSON arguments provided by the model.
-        const args = JSON.parse(toolCall.function.arguments);
+    try {
+      message.tool_calls.forEach(function(toolCall) {
+        let resultContent = "";
+        try {
+          // Parse the stringified JSON arguments provided by the model.
+          const args = JSON.parse(toolCall.function.arguments);
 
-        // Use dispatch object for scalable routing of execution
-        const dispatcher = TOOL_DISPATCHER[toolCall.function.name];
-        if (dispatcher) {
-          resultContent = dispatcher(args);
-        } else {
-          // Handle hallucinated or unsupported tool names.
-          resultContent = "Unknown tool requested.";
+          // Use dispatch object for scalable routing of execution
+          const dispatcher = TOOL_DISPATCHER[toolCall.function.name];
+          if (dispatcher) {
+            resultContent = dispatcher(args);
+          } else {
+            // Handle hallucinated or unsupported tool names.
+            resultContent = "Unknown tool requested.";
+          }
+        } catch (err) {
+          if (err.message && err.message.indexOf('__PROPOSE_RECIPES_INTERCEPT__:') === 0) {
+            throw err;
+          }
+          // Catch localized execution errors and feed them back to the AI so it can attempt a correction.
+          resultContent = "Error executing tool: " + err.message;
         }
-      } catch (err) {
-        // Catch localized execution errors and feed them back to the AI so it can attempt a correction.
-        resultContent = "Error executing tool: " + err.message;
-      }
 
-      // 3. Append the execution results back into the context window under the 'tool' role.
-      messages.push({
-        role: "tool",
-        tool_call_id: toolCall.id,
-        name: toolCall.function.name,
-        content: resultContent
+        // 3. Append the execution results back into the context window under the 'tool' role.
+        messages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          name: toolCall.function.name,
+          content: resultContent
+        });
       });
-    });
+    } catch (e) {
+      if (e.message && e.message.indexOf('__PROPOSE_RECIPES_INTERCEPT__:') === 0) {
+        return e.message.substring('__PROPOSE_RECIPES_INTERCEPT__:'.length);
+      }
+      throw e;
+    }
 
     // 4. Recurse into the loop, providing the gateway with the updated context window containing tool results.
     return executeAgentLoop(messages, depth + 1);
