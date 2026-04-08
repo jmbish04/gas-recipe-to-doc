@@ -89,7 +89,7 @@ function chatWithAI(messages) {
   // Log the most recent user query before the API call (non-blocking)
   const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
   if (lastUserMsg) {
-    _logToSheet_('search', lastUserMsg.content, JSON.stringify(messages), '');
+    _logToSheet_('search', lastUserMsg.content, JSON.stringify(messages.slice(-5)), '');
   }
 
   const options = {
