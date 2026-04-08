@@ -133,5 +133,20 @@ const TOOLS = [
         additionalProperties: false
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "capture_recipe_data",
+      description: "Extracts recipe markdown and captures a screenshot of the finished dish using Cloudflare Browser Rendering API.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "The URL of the recipe to capture." }
+        },
+        required: ["url"],
+        additionalProperties: false
+      }
+    }
   }
 ];
