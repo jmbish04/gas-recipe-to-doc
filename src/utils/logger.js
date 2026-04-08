@@ -76,7 +76,7 @@ function getHistory() {
 function _logToSheet_(type, name, details, url) {
   try {
     // Open the master logging spreadsheet. (Hardcoded per requirement)
-    const ss = SpreadsheetApp.openById('15OZdqdenNGVASN_EjygVuQkpL6ldO_Lk-hDon7aszw4');
+    const ss = SpreadsheetApp.openById(CONFIG.LOG_SHEET_ID);
 
     // Attempt to resolve the specific worksheet.
     let sheet = ss.getSheetByName(CONFIG.HISTORY_SHEET_NAME);
