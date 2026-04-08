@@ -1,0 +1,44 @@
+name: Deploy to Apps Script
+
+on:
+  push:
+    branches:
+      - main  # Runs automatically when you push to the main branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Clasp
+        run: npm install -g @google/clasp
+
+      - name: Provide Authentication
+        # This creates the hidden auth file from your GitHub Secret
+        run: echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
+
+      - name: Push and Programmatic Deploy
+        run: |
+          # 1. Push local changes to the Apps Script server
+          clasp push -f
+          
+          # 2. Find the existing Web App Deployment ID
+          # This grabs the ID listed directly above the "web app" label
+          DEPLOY_ID=$(clasp deployments | grep -B 1 "web app" | head -n 1 | awk '{print $2}')
+          
+          if [ -z "$DEPLOY_ID" ]; then
+            echo "Error: No existing web app deployment found to update."
+            exit 1
+          fi
+          
+          echo "Updating Deployment ID: $DEPLOY_ID"
+          
+          # 3. Deploy to that specific ID to keep the URL the same
+          clasp deploy -i "$DEPLOY_ID" -d "Automated CI/CD Update: $(date)"
