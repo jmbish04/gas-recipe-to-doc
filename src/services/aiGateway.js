@@ -29,6 +29,20 @@ function chatWithAI(messages) {
   return executeAgentLoop(fullMessages);
 }
 
+// Tool Dispatch Map definition for better code maintainability
+const TOOL_DISPATCHER = {
+  'search_web': function(args) {
+    return searchGoogleCustom(args.query);
+  },
+  'search_image': function(args) {
+    return findRecipeImage(args.title) || "No image found.";
+  },
+  'create_recipe_doc': function(args) {
+    const docRes = JSON.parse(createRecipeDoc(args));
+    return "Document created successfully: " + docRes.url;
+  }
+};
+
 /**
  * Recursively resolves tool calls from the AI model until a final structured output is reached.
  * @param {Array} messages - The cumulative message history including tool request/response pairs.
@@ -112,17 +126,10 @@ function executeAgentLoop(messages, depth = 0) {
         // Parse the stringified JSON arguments provided by the model.
         const args = JSON.parse(toolCall.function.arguments);
 
-        // Route the execution based on the specific function name.
-        if (toolCall.function.name === 'search_web') {
-          // Trigger the Google Custom Search utility.
-          resultContent = searchGoogleCustom(args.query);
-        } else if (toolCall.function.name === 'search_image') {
-          // Trigger the Image Search utility and provide a safe fallback if no image is found.
-          resultContent = findRecipeImage(args.title) || "No image found.";
-        } else if (toolCall.function.name === 'create_recipe_doc') {
-          // Trigger the Document Actuation utility. Parse the resulting JSON to extract the URL.
-          const docRes = JSON.parse(createRecipeDoc(args));
-          resultContent = "Document created successfully: " + docRes.url;
+        // Use dispatch object for scalable routing of execution
+        const dispatcher = TOOL_DISPATCHER[toolCall.function.name];
+        if (dispatcher) {
+          resultContent = dispatcher(args);
         } else {
           // Handle hallucinated or unsupported tool names.
           resultContent = "Unknown tool requested.";

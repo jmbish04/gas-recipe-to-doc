@@ -66,7 +66,18 @@ function createRecipeDoc(recipe) {
 
         // Calculate and enforce a standardized width of 450px while maintaining the original aspect ratio.
         const width = 450;
-        const height = Math.round((img.getHeight() / img.getWidth()) * width);
+
+        // Guard against invalid width dimensions from Blob to avoid divide by zero errors and 0 height crashes.
+        let height = 450; // Fallback default 1:1 aspect ratio height
+        const originalWidth = img.getWidth();
+        const originalHeight = img.getHeight();
+
+        if (originalWidth > 0 && originalHeight > 0) {
+           height = Math.round((originalHeight / originalWidth) * width);
+           // extra guard to ensure calculated height does not end up as 0 due to rounding
+           if (height <= 0) height = width;
+        }
+
         img.setWidth(width).setHeight(height);
 
         // Strip out the original placeholder text string.
