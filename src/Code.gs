@@ -28,7 +28,7 @@ const SYSTEM_PROMPT = `You are a helpful recipe assistant. When the user asks fo
     "cookTime": "X minutes",
     "servings": "X servings",
     "ingredients": ["ingredient 1", "ingredient 2"],
-    "instructions": ["Step 1: Do this", "Step 2: Do that"]
+    "instructions": ["Do this", "Do that"]
   }
 }
 For all other questions, respond ONLY with a JSON object:
