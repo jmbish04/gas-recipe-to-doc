@@ -3,7 +3,7 @@ name: Deploy to Apps Script
 on:
   push:
     branches:
-      - main  # Runs automatically when you push to the main branch
+      - main
 
 jobs:
   deploy:
@@ -21,24 +21,24 @@ jobs:
         run: npm install -g @google/clasp
 
       - name: Provide Authentication
-        # This creates the hidden auth file from your GitHub Secret
         run: echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
 
       - name: Push and Programmatic Deploy
         run: |
-          # 1. Push local changes to the Apps Script server
           clasp push -f
           
-          # 2. Find the existing Web App Deployment ID
-          # This grabs the ID listed directly above the "web app" label
-          DEPLOY_ID=$(clasp deployments | grep -B 1 "web app" | head -n 1 | awk '{print $2}')
+          # Search specifically for the deployment describing itself as "PROD_WEB_APP"
+          # Output format is: "- <DEPLOYMENT_ID> @<VERSION> - PROD_WEB_APP"
+          # awk '{print $2}' grabs the ID (the second item in the line)
+          DEPLOY_ID=$(clasp deployments | grep "PROD_WEB_APP" | head -n 1 | awk '{print $2}')
           
           if [ -z "$DEPLOY_ID" ]; then
-            echo "Error: No existing web app deployment found to update."
+            echo "Error: No deployment with description 'PROD_WEB_APP' found."
+            echo "Run 'clasp deployments' locally to check your deployment descriptions."
             exit 1
           fi
           
-          echo "Updating Deployment ID: $DEPLOY_ID"
+          echo "Found Production Deployment: $DEPLOY_ID"
           
-          # 3. Deploy to that specific ID to keep the URL the same
-          clasp deploy -i "$DEPLOY_ID" -d "Automated CI/CD Update: $(date)"
+          # Update the deployment, keeping the "PROD_WEB_APP" tag so it works next time too
+          clasp deploy -i "$DEPLOY_ID" -d "PROD_WEB_APP"
