@@ -52,7 +52,7 @@ const CONFIG = {
   // Dynamically construct the Cloudflare AI Gateway Universal Endpoint utilizing the account ID.
   CLOUDFLARE_AI_GATEWAY_URL: `https://gateway.ai.cloudflare.com/v1/${CF_ACCOUNT_ID}/${CF_AIG_SLUG}/compat/chat/completions`,
   // Map the AIG Token to the internal key representation.
-  CLOUDFLARE_AI_GATEWAY_KEY: CF_AIG_TOKEN,
+  CLOUDFLARE_AI_GATEWAY_TOKEN: CF_AIG_TOKEN,
   // Map the Auth Token to the internal key representation.
   CLOUDFLARE_AUTH_TOKEN: CF_AUTH_TOKEN,
   // Map the Browser Render API Token to the internal key representation.
@@ -61,8 +61,8 @@ const CONFIG = {
   CLOUDFLARE_IMAGES_STREAM_TOKEN: CF_BROWSER_RENDER_TOKEN,
 
   // Define the designated Agent LLM. Using the OpenAI interface structure for guaranteed tool calling compliance.
-  AI_MODEL: scriptProps.getProperty('AI_MODEL_NAME') || 'google-ai-studio/gemini-2.5-pro',
-  AI_MODEL_FALLBACK_NAME: scriptProps.getProperty('AI_MODEL_FALLBACK_NAME') || 'workers-ai/@cf/openai/gpt-oss-120b',
+  AI_MODEL: scriptProps.getProperty('AI_MODEL_NAME') || 'google-ai-studio/gemini-3-flash-preview',
+  AI_MODEL_FALLBACK_NAME: scriptProps.getProperty('AI_MODEL_FALLBACK_NAME') || 'workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast',
 
   // Define the target worksheet name within the logging spreadsheet.
   HISTORY_SHEET_NAME: 'History'
