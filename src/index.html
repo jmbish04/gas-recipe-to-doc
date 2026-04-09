@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Recipe Assistant</title>
 
-  <!-- Tailwind CSS Play CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -49,27 +48,60 @@
 <body class="dark">
   <div id="root"></div>
 
-  <!-- React 18 UMD -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <!-- Babel Standalone for JSX -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <script type="text/babel" data-presets="react">
     const { useState, useEffect, useRef, useCallback } = React;
 
+    // ─── Telemetry Helper ───────────────────────────────────────────────────
+    /**
+     * Sends telemetry to the server with a failure handler to catch cases where 
+     * the server-side logging itself fails to fire.
+     */
+    const logClientTelemetry = (fnContext, message, data) => {
+      const fnName = typeof fnContext === 'function' ? fnContext.name : fnContext;
+      if (typeof google !== 'undefined' && google.script) {
+        google.script.run
+          .withFailureHandler(err => {
+            console.error(`[TELEMETRY FAILURE] Failed to log "${message}" from ${fnName}:`, err);
+          })
+          .logTelemetry(fnName, message, data);
+      }
+    };
+
     // ─── google.script.run Promise wrapper ───────────────────────────────────
-    const runScript = (fnName, ...args) =>
-      new Promise((resolve, reject) => {
+    const runScript = (fnName, ...args) => {
+      const startTime = Date.now();
+      console.log(`[runScript] START: ${fnName}`);
+      logClientTelemetry(fnName, 'Invoking server function', { argsSnippet: JSON.stringify(args).substring(0, 100) });
+
+      return new Promise((resolve, reject) => {
         if (typeof google === 'undefined' || !google.script) {
-          reject(new Error('Not running in Google Apps Script context'));
+          const contextErr = new Error('Not running in Google Apps Script context');
+          console.error(`[runScript] CRITICAL: ${contextErr.message}`);
+          logClientTelemetry(fnName, 'Execution Failed: Context Error', contextErr.message);
+          reject(contextErr);
           return;
         }
+
         google.script.run
-          .withSuccessHandler(resolve)
-          .withFailureHandler(reject)
+          .withSuccessHandler(result => {
+            const elapsed = Date.now() - startTime;
+            console.log(`[runScript] SUCCESS: ${fnName} (+${elapsed}ms)`);
+            logClientTelemetry(fnName, 'Server call completed successfully', { elapsedMs: elapsed });
+            resolve(result);
+          })
+          .withFailureHandler(error => {
+            const elapsed = Date.now() - startTime;
+            console.error(`[runScript] FAILED: ${fnName} (+${elapsed}ms)`, error);
+            logClientTelemetry(fnName, 'Server call failed', { error: error.message, elapsedMs: elapsed });
+            reject(error);
+          })
           [fnName](...args);
       });
+    };
 
     // ─── SVG Icons ────────────────────────────────────────────────────────────
     const SendIcon = () => (
@@ -120,110 +152,125 @@
 
     // ─── RecipeCard Component ─────────────────────────────────────────────────
     function RecipeCard({ recipe }) {
-    const [exporting, setExporting] = useState(false);
-    const [exported, setExported] = useState(null);
-    const [exportError, setExportError] = useState(null);
+      const [exporting, setExporting] = useState(false);
+      const [exported, setExported] = useState(null);
+      const [exportError, setExportError] = useState(null);
 
-    const handleExport = async () => {
-      setExporting(true);
-      setExportError(null);
-      try {
-        const json = await runScript('createRecipeDoc', recipe);
-        setExported(JSON.parse(json));
-      } catch (err) {
-        setExportError(err.message || 'Export failed.');
-      } finally {
-        setExporting(false);
-      }
-    };
+      const handleExport = async () => {
+        const startTime = Date.now();
+        console.log(`[handleExport] START: Exporting "${recipe.title}"`);
+        logClientTelemetry(handleExport, 'Function started', { title: recipe.title });
 
-    return (
-      <div className="fade-in rounded-xl border border-zinc-700/50 overflow-hidden bg-zinc-900 w-full max-w-lg mb-4 shadow-2xl">
-        {/* HERO IMAGE SECTION */}
-        {recipe.imageUrl && (
-          <div className="w-full h-48 bg-zinc-800 border-b border-zinc-700/50 relative">
-            <img 
-              src={recipe.imageUrl} 
-              alt={recipe.title}
-              className="w-full h-full object-cover opacity-90"
-              onError={(e) => e.target.style.display = 'none'}
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/80 to-transparent pointer-events-none" />
-          </div>
-        )}
+        setExporting(true);
+        setExportError(null);
+        try {
+          console.log(`[handleExport] STEP: Calling createRecipeDoc (+${Date.now() - startTime}ms)`);
+          const json = await runScript('createRecipeDoc', recipe);
+          
+          console.log(`[handleExport] STEP: Received raw response (+${Date.now() - startTime}ms)`);
+          const parsed = JSON.parse(json);
+          setExported(parsed);
 
-        <div className="bg-gradient-to-br from-emerald-900 to-emerald-800 px-5 py-4">
-          <h3 className="text-lg font-bold text-white leading-tight">{recipe.title}</h3>
-          <p className="text-xs text-emerald-200/70 mt-1 line-clamp-2">{recipe.description}</p>
-        </div>
+          console.log(`[handleExport] SUCCESS: Export complete (+${Date.now() - startTime}ms)`, parsed);
+          logClientTelemetry(handleExport, 'Export successful', { url: parsed.url, elapsedMs: Date.now() - startTime });
+        } catch (err) {
+          console.error(`[handleExport] FAILED: ${err.message || 'Export failed.'} (+${Date.now() - startTime}ms)`);
+          setExportError(err.message || 'Export failed.');
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-3 divide-x divide-zinc-700/50 border-b border-zinc-700/50 bg-zinc-900/50">
-          {[
-            { label: 'Prep', value: recipe.prepTime },
-            { label: 'Cook', value: recipe.cookTime },
-            { label: 'Serves', value: recipe.servings }
-          ].map(({ label, value }) => (
-            <div key={label} className="py-3 text-center">
-              <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">{label}</p>
-              <p className="text-sm font-semibold text-zinc-200 mt-0.5">{value || 'N/A'}</p>
+          logClientTelemetry(handleExport, 'Export failed', err);
+        } finally {
+          setExporting(false);
+        }
+      };
+
+      return (
+        <div className="fade-in rounded-xl border border-zinc-700/50 overflow-hidden bg-zinc-900 w-full max-w-lg mb-4 shadow-2xl">
+          {/* HERO IMAGE SECTION */}
+          {recipe.imageUrl && (
+            <div className="w-full h-48 bg-zinc-800 border-b border-zinc-700/50 relative">
+              <img 
+                src={recipe.imageUrl} 
+                alt={recipe.title}
+                className="w-full h-full object-cover opacity-90"
+                onError={(e) => e.target.style.display = 'none'}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/80 to-transparent pointer-events-none" />
             </div>
-          ))}
-        </div>
-
-        <div className="p-5 space-y-6">
-          {/* Ingredients */}
-          {recipe.ingredients?.length > 0 && (
-          <div>
-            <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2.5">Ingredients</h4>
-            <ul className="text-sm text-zinc-300 space-y-1.5">
-              {recipe.ingredients.map((ing, i) => (
-                <li key={i} className="flex gap-2">
-                  <span className="text-emerald-500/50">•</span>
-                  <span>{ing}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
           )}
 
-          {/* Instructions */}
-          {recipe.instructions?.length > 0 && (
-          <div>
-            <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2.5">Instructions</h4>
-            <ol className="text-sm text-zinc-300 space-y-3">
-              {recipe.instructions.map((step, i) => (
-                <li key={i} className="flex gap-3">
-                  <span className="shrink-0 w-5 h-5 rounded bg-zinc-800 text-[10px] font-bold text-emerald-400 flex items-center justify-center border border-zinc-700">{i+1}</span>
-                  <span className="leading-relaxed">{step.replace(/^(Step\s*\d+[:.]\s*|\d+[:.]\s*)/i, '')}</span>
-                </li>
-              ))}
-            </ol>
+          <div className="bg-gradient-to-br from-emerald-900 to-emerald-800 px-5 py-4">
+            <h3 className="text-lg font-bold text-white leading-tight">{recipe.title}</h3>
+            <p className="text-xs text-emerald-200/70 mt-1 line-clamp-2">{recipe.description}</p>
           </div>
-          )}
 
-          <div className="pt-4 border-t border-zinc-800/50">
-            {exported ? (
-              <div className="flex items-center justify-between bg-emerald-900/20 p-3 rounded-lg border border-emerald-900/30">
-                <span className="text-xs text-emerald-400 font-bold">✓ READY IN GOOGLE DRIVE</span>
-                <a href={exported.url} target="_blank" className="flex items-center gap-1.5 text-xs text-white font-bold underline decoration-emerald-500/50">
-                  OPEN DOC <ExternalLinkIcon />
-                </a>
+          {/* Stats Grid */}
+          <div className="grid grid-cols-3 divide-x divide-zinc-700/50 border-b border-zinc-700/50 bg-zinc-900/50">
+            {[
+              { label: 'Prep', value: recipe.prepTime },
+              { label: 'Cook', value: recipe.cookTime },
+              { label: 'Serves', value: recipe.servings }
+            ].map(({ label, value }) => (
+              <div key={label} className="py-3 text-center">
+                <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">{label}</p>
+                <p className="text-sm font-semibold text-zinc-200 mt-0.5">{value || 'N/A'}</p>
               </div>
-            ) : (
-              <button
-                onClick={handleExport}
-                disabled={exporting}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] transition-all disabled:bg-zinc-800 disabled:text-zinc-600 text-white text-xs font-bold uppercase tracking-widest"
-              >
-                {exporting ? <><SpinnerIcon size={14} /> GENERATING...</> : <><DocIcon /> EXPORT TO GOOGLE DOC</>}
-              </button>
+            ))}
+          </div>
+
+          <div className="p-5 space-y-6">
+            {/* Ingredients */}
+            {recipe.ingredients?.length > 0 && (
+            <div>
+              <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2.5">Ingredients</h4>
+              <ul className="text-sm text-zinc-300 space-y-1.5">
+                {recipe.ingredients.map((ing, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="text-emerald-500/50">•</span>
+                    <span>{ing}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
             )}
+
+            {/* Instructions */}
+            {recipe.instructions?.length > 0 && (
+            <div>
+              <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2.5">Instructions</h4>
+              <ol className="text-sm text-zinc-300 space-y-3">
+                {recipe.instructions.map((step, i) => (
+                  <li key={i} className="flex gap-3">
+                    <span className="shrink-0 w-5 h-5 rounded bg-zinc-800 text-[10px] font-bold text-emerald-400 flex items-center justify-center border border-zinc-700">{i+1}</span>
+                    <span className="leading-relaxed">{step.replace(/^(Step\s*\d+[:.]\s*|\d+[:.]\s*)/i, '')}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            )}
+
+            <div className="pt-4 border-t border-zinc-800/50">
+              {exported ? (
+                <div className="flex items-center justify-between bg-emerald-900/20 p-3 rounded-lg border border-emerald-900/30">
+                  <span className="text-xs text-emerald-400 font-bold">✓ READY IN GOOGLE DRIVE</span>
+                  <a href={exported.url} target="_blank" className="flex items-center gap-1.5 text-xs text-white font-bold underline decoration-emerald-500/50">
+                    OPEN DOC <ExternalLinkIcon />
+                  </a>
+                </div>
+              ) : (
+                <button
+                  onClick={handleExport}
+                  disabled={exporting}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] transition-all disabled:bg-zinc-800 disabled:text-zinc-600 text-white text-xs font-bold uppercase tracking-widest"
+                >
+                  {exporting ? <><SpinnerIcon size={14} /> GENERATING...</> : <><DocIcon /> EXPORT TO GOOGLE DOC</>}
+                </button>
+              )}
+              {exportError && <p className="text-[10px] text-red-400 mt-2 text-center uppercase font-bold tracking-tight">{exportError}</p>}
+            </div>
           </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
     // ─── MessageBubble Component ──────────────────────────────────────────────
     function MessageBubble({ message }) {
@@ -292,10 +339,23 @@
       const [error, setError] = useState(null);
 
       useEffect(() => {
+        const startTime = Date.now();
+        console.log(`[HistoryView] START: Fetching history`);
+        logClientTelemetry('HistoryView_Load', 'Effect started');
+
         setLoading(true);
         runScript('getHistory')
-          .then(json => setHistory(JSON.parse(json)))
-          .catch(err => setError(err.message || 'Failed to load history'))
+          .then(json => {
+            const data = JSON.parse(json);
+            setHistory(data);
+            console.log(`[HistoryView] SUCCESS: Loaded ${data.length} items (+${Date.now() - startTime}ms)`);
+            logClientTelemetry('HistoryView_Load', 'History fetched successfully', { count: data.length, elapsedMs: Date.now() - startTime });
+          })
+          .catch(err => {
+            console.error(`[HistoryView] FAILED (+${Date.now() - startTime}ms)`, err);
+            setError(err.message || 'Failed to load history');
+            logClientTelemetry('HistoryView_Load', 'History fetch failed', err);
+          })
           .finally(() => setLoading(false));
       }, []);
 
@@ -483,14 +543,19 @@
       /* Updated React sendMessage loop within src/index.html to prevent null access crashes. */
 
 const sendMessage = useCallback(async () => {
+  const startTime = Date.now();
   const text = inputValue.trim();
   if (!text || loading) return;
+
+  console.log(`[sendMessage] START: "${text}"`);
+  logClientTelemetry(sendMessage, 'Function started', { prompt: text });
 
   setInputValue('');
   addMessage({ role: 'user', type: 'text', content: text });
   setLoading(true);
 
   try {
+    console.log(`[sendMessage] STEP: Preparing conversation history (+${Date.now() - startTime}ms)`);
     let aiMessages = [...messages, { role: 'user', content: text }]
       .filter(m => m.type !== 'error' && m.type !== 'progress')
       .map(m => {
@@ -509,33 +574,52 @@ const sendMessage = useCallback(async () => {
 
     while (!isFinal && breaker < 10) {
         breaker++;
+        const loopStartTime = Date.now();
+        console.log(`[sendMessage] STEP: Starting loop iteration ${breaker} (+${loopStartTime - startTime}ms)`);
+        logClientTelemetry(sendMessage, `Inference turn ${breaker} starting`, { breaker, isFallback });
+
         const responseStr = await runScript('chatWithAI_step', aiMessages, isFallback);
         let response;
         try {
             response = JSON.parse(responseStr);
+            console.log(`[sendMessage] STEP: Response received for iteration ${breaker} (+${Date.now() - loopStartTime}ms)`);
         } catch (e) {
-           throw new Error("Failed to parse response: " + responseStr);
+           const parseErr = new Error("Failed to parse response: " + responseStr);
+           logClientTelemetry(sendMessage, 'JSON Parse error in response loop', parseErr);
+           throw parseErr;
         }
 
         if (response.type === 'fallback') {
+            console.warn(`[sendMessage] STEP: Primary model failed, triggering fallback (+${Date.now() - loopStartTime}ms)`);
+            logClientTelemetry(sendMessage, 'AI Model Fallback Triggered', { error: response.error, fallbackModel: response.fallbackModel });
             addMessage({ role: 'assistant', type: 'error', content: `Primary AI model failed (${response.error}). Falling back to ${response.fallbackModel}...` });
             isFallback = true;
             continue;
         }
 
         if (response.type === 'tool_calls') {
+            console.log(`[sendMessage] STEP: Processing ${response.tools.length} tool calls (+${Date.now() - loopStartTime}ms)`);
             aiMessages.push(response.message);
             for (let tool of response.tools) {
+                const toolStartTime = Date.now();
                 const progressId = Date.now() + Math.random();
+                console.log(`[sendMessage] STEP: Executing tool "${tool.function.name}" (+${toolStartTime - startTime}ms)`);
+                logClientTelemetry(sendMessage, 'Executing tool', { tool: tool.function.name, args: tool.function.arguments });
+
                 setMessages(prev => [...prev, { id: progressId, role: 'assistant', type: 'progress', content: `Executing ${tool.function.name}...` }]);
                 const toolResult = await runScript('executeTool', tool.function.name, tool.function.arguments);
+                
                 setMessages(prev => prev.filter(m => m.id !== progressId));
                 aiMessages.push({ role: "tool", tool_call_id: tool.id, name: tool.function.name, content: toolResult });
+                console.log(`[sendMessage] STEP: Tool "${tool.function.name}" completed in ${Date.now() - toolStartTime}ms (+${Date.now() - startTime}ms total)`);
             }
         } else if (response.type === 'final') {
             isFinal = true;
             const finalRes = response.response;
             
+            console.log(`[sendMessage] STEP: Final response reached (+${Date.now() - loopStartTime}ms)`);
+            logClientTelemetry(sendMessage, 'Final response processed', { responseType: finalRes ? (finalRes.proposals ? 'recipes' : 'text') : 'null' });
+
             // FIX: Defensive check for null response objects.
             if (finalRes && finalRes.proposals && finalRes.proposals.length > 0) {
               addMessage({ role: 'assistant', type: 'recipes', content: finalRes.message, recipes: finalRes.proposals });
@@ -545,20 +629,29 @@ const sendMessage = useCallback(async () => {
               addMessage({ role: 'assistant', type: 'text', content: (finalRes && finalRes.message) ? finalRes.message : "I'm sorry, I couldn't process that recipe correctly." });
             }
         } else {
+            console.error(`[sendMessage] FAILED: Unexpected response type "${response.type}" (+${Date.now() - loopStartTime}ms)`);
+            logClientTelemetry(sendMessage, 'Unexpected response type', { type: response.type });
             isFinal = true;
             addMessage({ role: 'assistant', type: 'error', content: 'Unexpected response type.' });
         }
     }
+
+    console.log(`[sendMessage] SUCCESS: Message flow complete in ${Date.now() - startTime}ms`);
+    logClientTelemetry(sendMessage, 'Function completed successfully', { elapsedMs: Date.now() - startTime, turns: breaker });
+
   } catch (err) {
+    console.error(`[sendMessage] CRITICAL FAILURE (+${Date.now() - startTime}ms)`, err);
+    logClientTelemetry(sendMessage, 'Message chain failed', err);
     addMessage({ role: 'assistant', type: 'error', content: err.message || 'Something went wrong. Please try again.' });
   } finally {
-    setLoading(true);
     setLoading(false);
   }
 }, [inputValue, loading, messages, addMessage]);
 
       // When user clicks "Repeat search" in history — switch to chat and pre-fill input
       const handleSelectSearch = useCallback(query => {
+        console.log(`[handleSelectSearch] Triggering repeat search for "${query}"`);
+        logClientTelemetry('handleSelectSearch', 'Repeating search', { query });
         setView('chat');
         setInputValue(query);
       }, []);
@@ -585,7 +678,11 @@ const sendMessage = useCallback(async () => {
               ].map(tab => (
                 <button
                   key={tab.id}
-                  onClick={() => setView(tab.id)}
+                  onClick={() => {
+                    console.log(`[Nav] Switching to tab: ${tab.id}`);
+                    logClientTelemetry('Navigation', 'Tab switch', tab.id);
+                    setView(tab.id);
+                  }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                     view === tab.id
                       ? 'bg-zinc-700 text-zinc-100 shadow-sm'
@@ -622,6 +719,7 @@ const sendMessage = useCallback(async () => {
     }
 
     // ─── Mount ────────────────────────────────────────────────────────────────
+    console.log('[Mount] Application Initializing');
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
   </script>
 </body>
