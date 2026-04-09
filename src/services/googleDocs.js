@@ -103,26 +103,36 @@ function applyShrinkToFit(doc, textElement, text) {
 }
 
 /**
- * Safely replaces a placeholder with a list, regardless of container type.
+ * Safely replaces a placeholder with a list.
+ * Prevents "Can't remove last paragraph" exception by checking child count.
  */
 function replacePlaceholderWithList(body, placeholder, items, glyphType, parseBold = false) {
   const rangeElement = body.findText(placeholder);
   if (!rangeElement) return;
 
-  const placeholderElement = rangeElement.getElement();
-  const container = placeholderElement.getParent();
-  const parentContainer = container.getParent(); // Usually Body or TableCell
-  const index = parentContainer.getChildIndex(container);
+  const element = rangeElement.getElement();
+  const container = element.getParent(); // Paragraph or ListItem
+  const parent = container.getParent(); // Body or TableCell
+  const index = parent.getChildIndex(container);
 
-  items.forEach((item, i) => {
-    // We insert into the parent container (Body) at the position of the placeholder
-    const listItem = parentContainer.insertListItem(index + i, item);
-    listItem.setGlyphType(glyphType);
-    if (parseBold) processMarkdownBold(listItem.editAsText(), item);
-  });
+  // Only proceed if we have items; otherwise, just clear the placeholder
+  if (items && items.length > 0) {
+    items.forEach((item, i) => {
+      const listItem = parent.insertListItem(index + i, item);
+      listItem.setGlyphType(glyphType);
+      if (parseBold) processMarkdownBold(listItem.editAsText(), item);
+    });
 
-  // Remove the original container (could be a Paragraph or a ListItem)
-  container.removeFromParent();
+    // Safe Remove: Only delete if it's not the last remaining element in the section
+    if (parent.getNumChildren() > 1) {
+      container.removeFromParent();
+    } else {
+      element.asText().setText(""); // Keep the container but empty it
+    }
+  } else {
+    // No items to add? Just clear the placeholder text
+    element.asText().setText("");
+  }
 }
 
 /**
