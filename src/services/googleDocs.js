@@ -19,25 +19,25 @@ function createRecipeDoc(recipe) {
   let templateFile, folder;
 
   /* Try to obtain the template file and export folder */
-  try{
+  try {
     templateFile = DriveApp.getFileById(CONFIG.TEMPLATE_ID);
   }
-  catch(error){
+  catch (error) {
     console.log(`[createRecipeDoc] Unable to access the Template Recipe Doc. ID provided was ${CONFIG.TEMPLATE_ID}; Error: ${JSON.stringify(error)}`);
   }
 
-  try{
+  try {
     folder = DriveApp.getFolderById(CONFIG.FOLDER_ID);
   }
-  catch(error){
+  catch (error) {
     console.log(`[createRecipeDoc] Unable to access the Export Drive Folder. ID provided was ${CONFIG.FOLDER_ID}; Error: ${JSON.stringify(error)}`);
-  }  
+  }
 
   const newFile = templateFile.makeCopy('Recipe: ' + recipe.title, folder);
   const doc = DocumentApp.openById(newFile.getId());
   const body = doc.getBody();
 
-  // 1. Title Replacement & Auto-Shrink Logic
+  // 1. Title Replacement & Auto-Shrink Logic (Senior Engineer Aesthetic)
   const titleText = (recipe.title || '').toUpperCase();
   const titlePlaceholder = body.findText('{{TITLE}}');
   if (titlePlaceholder) {
@@ -65,6 +65,7 @@ function createRecipeDoc(recipe) {
   // 4. Persistent Image Actuation
   processCloudflareImage(body, recipe, CF_ACCOUNT_ID, CF_TOKEN);
 
+  // Mandatory save and close to flush changes immediately
   doc.saveAndClose();
   const docUrl = newFile.getUrl();
 
@@ -82,17 +83,11 @@ function applyShrinkToFit(doc, textElement, text) {
   const marginR = doc.getMarginRight();
   const availableWidth = pageWidth - marginL - marginR;
 
-  // Find the longest word to prevent it from splitting
   const words = text.split(/\s+/);
   const longestWord = words.reduce((a, b) => a.length > b.length ? a : b, "");
 
   let currentSize = MAX_TITLE_FONT_SIZE;
   
-  /**
-   * Estimation Formula:
-   * Width ≈ (Character Count) * (Font Size) * (Average Width Factor)
-   * Factor 0.65 is conservative for bold Serif/Sans fonts to ensure no wrap.
-   */
   while (currentSize > MIN_TITLE_FONT_SIZE) {
     const estimatedWordWidth = longestWord.length * currentSize * 0.65;
     if (estimatedWordWidth <= availableWidth) break;
@@ -104,7 +99,7 @@ function applyShrinkToFit(doc, textElement, text) {
 
 /**
  * Safely replaces a placeholder with a list.
- * Prevents "Can't remove last paragraph" exception by checking child count.
+ * Fixes "Can't remove last paragraph" exception by verifying if the element is the section's final child.
  */
 function replacePlaceholderWithList(body, placeholder, items, glyphType, parseBold = false) {
   const rangeElement = body.findText(placeholder);
@@ -115,19 +110,27 @@ function replacePlaceholderWithList(body, placeholder, items, glyphType, parseBo
   const parent = container.getParent(); // Body or TableCell
   const index = parent.getChildIndex(container);
 
-  // Only proceed if we have items; otherwise, just clear the placeholder
   if (items && items.length > 0) {
+    // Insert new items at the placeholder's current index
     items.forEach((item, i) => {
       const listItem = parent.insertListItem(index + i, item);
       listItem.setGlyphType(glyphType);
       if (parseBold) processMarkdownBold(listItem.editAsText(), item);
     });
 
-    // Safe Remove: Only delete if it's not the last remaining element in the section
-    if (parent.getNumChildren() > 1) {
+    /**
+     * REFINED SAFE REMOVE:
+     * Check if the container is the last child of its parent (e.g., end of Body or TableCell).
+     * If it is the last child, we clear its text instead of removing it to satisfy the 
+     * structural requirement of having at least one trailing paragraph.
+     */
+    const isLastChild = (parent.getChildIndex(container) === parent.getNumChildren() - 1);
+    
+    if (!isLastChild) {
       container.removeFromParent();
     } else {
-      element.asText().setText(""); // Keep the container but empty it
+      // Clear text but keep paragraph to avoid structural violation
+      element.asText().setText("");
     }
   } else {
     // No items to add? Just clear the placeholder text
