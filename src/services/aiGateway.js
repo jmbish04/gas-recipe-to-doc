@@ -90,8 +90,11 @@ function executeAgentStep(messages, isFallback = false) {
       actualModel = `workers-ai/${actualModel.replace('workers-ai/', '')}`;
       endpointUrl = `https://api.cloudflare.com/client/v4/accounts/${CONFIG.CLOUDFLARE_ACCOUNT_ID}/ai/run/${actualModel}`;
       headers = {
-          'Authorization': `Bearer ${CONFIG.CLOUDFLARE_AUTH_TOKEN}`
+          'Authorization': `Bearer ${CONFIG.CONFI.CLOUDFLARE_AI_GATEWAY_TOKEN}`
       };
+    
+      console.log(`[executeAgentStep] workers-ai fallback model: "${CONFIG.AI_MODEL_FALLBACK_NAME}"; Running as ${endpointUrl}`);    
+    
       delete payload.model;
   }
 
