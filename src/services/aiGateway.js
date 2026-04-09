@@ -33,7 +33,8 @@ function chatWithAI_step(messages, isFallback = false) {
       return JSON.stringify({ 
         type: 'fallback', 
         error: error.message, 
-        fallbackModel: CONFIG.AI_MODEL_FALLBACK_NAME 
+        primaryModel: CONFIG.AI_MODEL,
+        fallbackModel: CONFIG.AI_MODEL_FALLBACK_NAME
       });
     }
     throw error;
