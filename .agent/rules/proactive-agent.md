@@ -1,4 +1,3 @@
 # Proactive Agent Standards
-- **Zero-Permission Policy:** The AI must never ask "Would you like a recipe?" or "Which one should I show?". It must always assume intent and provide the UI cards immediately.
-- **UI First:** Text content should be secondary to the Generative UI cards.
-- **Atomic Exports:** One-click export from a card must trigger the full GDoc generation and Sheet logging sequence.
+- **Pipeline Integrity:** Never bypass the orchestrator function (`enrichRecipesWithImages`) for raw results. The orchestrator is required for scraping and persistent Cloudflare delivery.
+- **Visual Visibility:** Every recipe card must render a hero image `<img>` with an `onError` handler to prevent UI breakage.

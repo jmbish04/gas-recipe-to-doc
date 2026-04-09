@@ -89,7 +89,6 @@ const RESPONSE_FORMAT = {
   }
 };
 
-// Define the array of callable functions available to the Agent during execution.
 const TOOLS = [
   {
     type: "function",
@@ -98,9 +97,7 @@ const TOOLS = [
       description: "Search Google for recipe ideas, ingredients, or cooking times.",
       parameters: {
         type: "object",
-        properties: {
-          query: { type: "string" }
-        },
+        properties: { query: { type: "string" } },
         required: ["query"],
         additionalProperties: false
       }
@@ -110,7 +107,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "propose_recipes",
-      description: "Propose EXACTLY 3 distinct, fully detailed recipes based on the user's request. THIS TOOL MUST BE CALLED IMMEDIATELY ONCE RECIPE IDEAS ARE FOUND.",
+      description: "Propose EXACTLY 3 distinct, fully detailed recipes. MUST BE CALLED IMMEDIATELY ONCE IDEAS ARE FOUND.",
       parameters: {
         type: "object",
         properties: {
@@ -120,36 +117,36 @@ const TOOLS = [
               type: "object",
               properties: {
                 title: { type: "string", description: "The official name of the dish." },
-                description: { type: "string", description: "A high-level summary of the dish's flavor profile and history." },
-                prepTime: { type: "string", description: "Estimated active preparation time, e.g., '15 mins'." },
-                cookTime: { type: "string", description: "Estimated cooking or baking time, e.g., '30 mins'." },
-                servings: { type: "string", description: "The number of people the recipe serves, e.g., '4'." },
-                calories: { type: "string", description: "Approximate calorie count per serving, e.g., '450 kcal'." },
-                ingredients: { type: "array", items: { type: "string" }, description: "Complete list of ingredients with precise measurements." },
+                description: { type: "string", description: "Summary of the flavor profile and presentation." },
+                prepTime: { type: "string", description: "Active prep time, e.g., '15 mins'." },
+                cookTime: { type: "string", description: "Cooking/baking time, e.g., '30 mins'." },
+                servings: { type: "string", description: "Yield, e.g., '4 servings'." },
+                calories: { type: "string", description: "Approximate kcal per serving, e.g., '450 kcal'." },
+                ingredients: { type: "array", items: { type: "string" }, description: "Complete list of items with measurements." },
                 instructions: { type: "array", items: { type: "string" }, description: "Step-by-step cooking sequence." },
                 culinaryScience: {
                   type: "array",
                   items: { type: "string" },
-                  description: "Expert-level culinary tips explaining the 'why' behind the cooking process (e.g., starch gelatinization, protein denaturing)."
+                  description: "Expert tips on the 'why' (e.g. starch management, Maillard reaction)."
                 },
                 restaurantTechniques: {
                   type: "array",
                   items: { type: "string" },
-                  description: "Professional techniques to improve presentation, texture, or efficiency (e.g., proper knife skills, tempering, reduction)."
+                  description: "Tips to elevate to restaurant quality (e.g. plating, garnishing)."
                 },
                 troubleshooting: {
                   type: "array",
                   items: { type: "string" },
-                  description: "Warning signs for overcooking, under-seasoning, or structural failure and how to correct them in real-time."
+                  description: "Common pitfalls and sensory cues for doneness."
                 },
                 chefInsights: {
                   type: "array",
                   items: { type: "string" },
-                  description: "Personal insights on flavor pairings, regional variations, or seasonal adjustments."
+                  description: "Advanced flavor balancing (salt, fat, acid, heat)."
                 },
-                sourceUrl: { type: "string", description: "The original reference URL for this recipe discovery." }
+                sourceUrl: { type: "string", description: "The URL of the discovery source." }
               },
-              required: ["title", "description", "prepTime", "cookTime", "servings", "ingredients", "instructions"],
+              required: ["title", "description", "prepTime", "cookTime", "servings", "ingredients", "instructions", "culinaryScience", "restaurantTechniques", "troubleshooting", "chefInsights", "sourceUrl"],
               additionalProperties: false
             }
           }
@@ -163,7 +160,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "create_recipe_doc",
-      description: "Generate and save a Google Doc containing the fully detailed recipe.",
+      description: "Generate a Google Doc for a recipe.",
       parameters: {
         type: "object",
         properties: {
@@ -174,25 +171,9 @@ const TOOLS = [
           servings: { type: "string" },
           ingredients: { type: "array", items: { type: "string" } },
           instructions: { type: "array", items: { type: "string" } },
-          sourceUrl: { type: "string" },
-          imageUrl: { type: "string", description: "Optional URL of the recipe image. Pass empty string if none." }
+          imageUrl: { type: "string" }
         },
         required: ["title", "description", "prepTime", "cookTime", "servings", "ingredients", "instructions", "imageUrl"],
-        additionalProperties: false
-      }
-    }
-  },
-  {
-    type: "function",
-    function: {
-      name: "capture_recipe_data",
-      description: "Extracts recipe markdown and captures a screenshot of the finished dish using Cloudflare Browser Rendering API.",
-      parameters: {
-        type: "object",
-        properties: {
-          url: { type: "string", description: "The URL of the recipe to capture." }
-        },
-        required: ["url"],
         additionalProperties: false
       }
     }
