@@ -11,6 +11,10 @@ const scriptProps = PropertiesService.getScriptProperties();
 // Safely extract the Cloudflare Account ID or fallback to a placeholder to prevent immediate catastrophic failure.
 const CF_ACCOUNT_ID = scriptProps.getProperty('CLOUDFLARE_ACCOUNT_ID');
 
+
+// Extract the Cloudflare Auth Token for direct API calls
+const CF_AUTH_TOKEN = scriptProps.getProperty('CLOUDFLARE_AUTH_TOKEN');
+
 // Extract the Cloudflare AI Gateway Token used for securely routing requests through CF Gateway.
 const CF_AIG_TOKEN = scriptProps.getProperty('CLOUDFLARE_AI_GATEWAY_TOKEN');
 
@@ -49,6 +53,8 @@ const CONFIG = {
   CLOUDFLARE_AI_GATEWAY_URL: `https://gateway.ai.cloudflare.com/v1/${CF_ACCOUNT_ID}/${CF_AIG_SLUG}/compat/chat/completions`,
   // Map the AIG Token to the internal key representation.
   CLOUDFLARE_AI_GATEWAY_KEY: CF_AIG_TOKEN,
+  // Map the Auth Token to the internal key representation.
+  CLOUDFLARE_AUTH_TOKEN: CF_AUTH_TOKEN,
   // Map the Browser Render API Token to the internal key representation.
   CLOUDFLARE_BROWSER_RENDER_TOKEN: CF_BROWSER_RENDER_TOKEN,
   // Map the Images API Token to the internal key representation.
