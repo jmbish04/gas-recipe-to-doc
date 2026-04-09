@@ -13,12 +13,25 @@ const MIN_TITLE_FONT_SIZE = 12;  // Minimum allowed font size before stopping
  * @returns {string} JSON stringified object containing {docId, url}.
  */
 function createRecipeDoc(recipe) {
-  const props = PropertiesService.getScriptProperties();
-  const CF_TOKEN = props.getProperty('CLOUDFLARE_IMAGES_STREAM_TOKEN');
-  const CF_ACCOUNT_ID = props.getProperty('CLOUDFLARE_ACCOUNT_ID');
+  const CF_TOKEN = CONFIG.CF_IMAGES_API_TOKEN;
+  const CF_ACCOUNT_ID = CONFIG.CLOUDFLARE_ACCOUNT_ID;
 
-  const templateFile = DriveApp.getFileById(CONFIG.TEMPLATE_ID);
-  const folder = DriveApp.getFolderById(CONFIG.TARGET_FOLDER_ID);
+  let templateFile, folder;
+
+  /* Try to obtain the template file and export folder */
+  try{
+    templateFile = DriveApp.getFileById(CONFIG.TEMPLATE_ID);
+  }
+  catch(error){
+    console.log(`[createRecipeDoc] Unable to access the Template Recipe Doc. ID provided was ${CONFIG.TEMPLATE_ID}; Error: ${JSON.stringify(error)}`);
+  }
+
+  try{
+    folder = DriveApp.getFolderById(CONFIG.FOLDER_ID);
+  }
+  catch(error){
+    console.log(`[createRecipeDoc] Unable to access the Export Drive Folder. ID provided was ${CONFIG.FOLDER_ID}; Error: ${JSON.stringify(error)}`);
+  }  
 
   const newFile = templateFile.makeCopy('Recipe: ' + recipe.title, folder);
   const doc = DocumentApp.openById(newFile.getId());
