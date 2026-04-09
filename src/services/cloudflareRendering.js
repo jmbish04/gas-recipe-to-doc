@@ -12,30 +12,18 @@
  * @returns {string} Result message indicating success or failure.
  */
 function captureRecipeData(targetUrl) {
-  // --- CONFIGURATION ---
-  const CLOUDFLARE_ACCOUNT_ID = CONFIG.CLOUDFLARE_ACCOUNT_ID;
-  const CLOUDFLARE_API_TOKEN = CONFIG.CLOUDFLARE_BROWSER_RENDER_TOKEN;
-
   if (!targetUrl) {
-    return "Error: No URL provided for capturing recipe data.";
+    return `[captureRecipeData] Error: No URL provided for capturing recipe data.`;
   }
 
   // --- EXECUTION ---
   try {
     // 1. Extract Markdown (Text & Structure)
-    const markdownContent = fetchCloudflareMarkdown(
-      targetUrl, 
-      CLOUDFLARE_ACCOUNT_ID, 
-      CLOUDFLARE_API_TOKEN
-    );
+    const markdownContent = fetchCloudflareMarkdown(targetUrl);
 
     // 2. Capture Screenshot (Visual of the finished food)
     // We use a mobile-like viewport to focus on the "Hero" image usually at the top
-    const imageBlob = fetchCloudflareScreenshot(
-      targetUrl, 
-      CLOUDFLARE_ACCOUNT_ID, 
-      CLOUDFLARE_API_TOKEN
-    );
+    const imageBlob = fetchCloudflareScreenshot(targetUrl);
 
     // 3. Save to Google Drive (Example Output)
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -69,8 +57,10 @@ function captureRecipeData(targetUrl) {
 /**
  * Calls Cloudflare /markdown endpoint
  */
-function fetchCloudflareMarkdown(url, accountId, token) {
-  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${accountId}/browser-rendering/markdown`;
+function fetchCloudflareMarkdown(url) {
+    // --- CONFIGURATION ---
+  const token = CONFIG.CLOUDFLARE_BROWSER_RENDER_TOKEN;
+  const endpoint = `${CLOUDFLARE_BROWSER_RENDER_URL}/markdown`;
 
   const options = {
     'method': 'post',
@@ -87,7 +77,7 @@ function fetchCloudflareMarkdown(url, accountId, token) {
   const response = UrlFetchApp.fetch(endpoint, options);
 
   if (response.getResponseCode() !== 200) {
-    throw new Error(`Markdown API Failed: ${response.getContentText()}`);
+    throw new Error(`[fetchCloudflareMarkdown] Markdown API Failed: ${response.getContentText()}`);
   }
 
   const contentType = response.getHeaders()['Content-Type'] || '';
@@ -102,8 +92,10 @@ function fetchCloudflareMarkdown(url, accountId, token) {
 /**
  * Calls Cloudflare /screenshot endpoint
  */
-function fetchCloudflareScreenshot(url, accountId, token) {
-  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${accountId}/browser-rendering/screenshot`;
+function fetchCloudflareScreenshot(url) {
+  // --- CONFIGURATION ---
+  const token = CONFIG.CLOUDFLARE_BROWSER_RENDER_TOKEN;
+  const endpoint = `${CLOUDFLARE_BROWSER_RENDER_URL}/screenshot`;
 
   const options = {
     'method': 'post',
@@ -125,7 +117,7 @@ function fetchCloudflareScreenshot(url, accountId, token) {
   const response = UrlFetchApp.fetch(endpoint, options);
 
   if (response.getResponseCode() !== 200) {
-    throw new Error(`Screenshot API Failed: ${response.getContentText()}`);
+    throw new Error(`[fetchCloudflareScreenshot] Screenshot API Failed: ${response.getContentText()}`);
   }
 
   return response.getBlob();
