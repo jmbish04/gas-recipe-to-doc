@@ -33,12 +33,13 @@ function chatWithAI_step(messages, isFallback = false) {
 }
 
 /**
- * Standardized inference turn. Removed recursion to prevent model forcing.
+ * Standardized inference turn.
+ * Enhanced: Added max_completion_tokens for reasoning models (gpt-oss-120b).
  */
 function executeAgentStep(messages, isFallback = false) {
   const model = isFallback ? CONFIG.AI_MODEL_FALLBACK_NAME : CONFIG.AI_MODEL;
   
-  // Map history while preserving Gemini-specific thought signatures if present.
+  // Map history while preserving specific signatures if present.
   const sanitizedMessages = messages.map(msg => {
     const cleanMsg = {
       role: msg.role,
@@ -49,10 +50,7 @@ function executeAgentStep(messages, isFallback = false) {
     if (msg.tool_calls) cleanMsg.tool_calls = msg.tool_calls;
     if (msg.tool_call_id) cleanMsg.tool_call_id = msg.tool_call_id;
     if (msg.name) cleanMsg.name = msg.name;
-    
-    // Support Gemini 3: Re-echo signatures from previous turns if available.
     if (msg.thought_signature) cleanMsg.thought_signature = msg.thought_signature;
-    
     return cleanMsg;
   });
 
@@ -67,7 +65,13 @@ function executeAgentStep(messages, isFallback = false) {
     tools: TOOLS,
     tool_choice: "auto",
     response_format: RESPONSE_FORMAT,
-    temperature: 0.5
+    temperature: 0.5,
+    /**
+     * Reasoning Budget: gpt-oss-120b requires a high token budget for internal chain-of-thought.
+     * We use max_completion_tokens (the OpenAI-compat standard for reasoning models) to ensure 
+     * enough space for both thought and the final JSON proposal.
+     */
+    max_completion_tokens: 4096 
   };
 
   const response = UrlFetchApp.fetch(CONFIG.CLOUDFLARE_AI_GATEWAY_URL, {
@@ -85,14 +89,13 @@ function executeAgentStep(messages, isFallback = false) {
   }
 
   const parsed = JSON.parse(text);
-  const aiMessage = parsed.choices[0].message;
-
-  // Capture Gemini 3 Thought Signature from current response if provided by Gateway.
-  if (parsed.choices[0].thought_signature) {
-    aiMessage.thought_signature = parsed.choices[0].thought_signature;
+  if (!parsed.choices || parsed.choices.length === 0) {
+    throw new Error("EMPTY_AI_RESPONSE: Gateway returned successfully but choices array was empty.");
   }
 
-  // Phase 1: Intercept Propose Recipes to prevent generative stall.
+  const aiMessage = parsed.choices[0].message;
+
+  // Intercept Propose Recipes to prevent generative stall.
   if (aiMessage.tool_calls && aiMessage.tool_calls.length > 0) {
     const proposeCall = aiMessage.tool_calls.find(tc => tc.function.name === 'propose_recipes');
     
@@ -122,7 +125,6 @@ function executeAgentStep(messages, isFallback = false) {
       });
     }
 
-    // Return to frontend to execute search_web or other tools.
     return JSON.stringify({ 
       type: "tool_calls", 
       message: aiMessage, 
@@ -133,9 +135,23 @@ function executeAgentStep(messages, isFallback = false) {
   return finalizeOutput(aiMessage.content);
 }
 
+/**
+ * Standardizes final output.
+ * Fix: Prevents "null" response objects which crash the frontend.
+ */
 function finalizeOutput(content) {
+  // If content is null/undefined (typical in tool-only turns), provide empty defaults.
+  if (content === null || content === undefined || content === "null") {
+     return JSON.stringify({ 
+       type: "final", 
+       response: { message: "", proposals: [], doc_url: "" } 
+     });
+  }
+
   try {
     const data = JSON.parse(content);
+    // Explicitly handle JSON.parse("null") returning null.
+    if (!data) throw new Error(`[finalizeOutput] Parsed data is null; content: ${content}`);    
     const keys = Object.keys(data).toString().toLowerCase();
     
     if(keys.indexOf('proposals') === -1) data.proposals = [];
