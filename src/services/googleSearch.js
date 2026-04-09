@@ -12,8 +12,7 @@
  */
 function searchGoogleCustom(query) {
   // Construct the secure API endpoint utilizing the injected API and CX keys, encoding the query safely.
-  const url = 'https://www.googleapis.com/customsearch/v1?key=' + CONFIG.SEARCH_API_KEY +
-    '&cx=' + CONFIG.SEARCH_CX + '&q=' + encodeURIComponent(query);
+  const url = `https://www.googleapis.com/customsearch/v1?key=${CONFIG.SEARCH_API_KEY}&cx=${CONFIG.SEARCH_CX}&q=${encodeURIComponent(query)}`;
 
   try {
     // Execute a synchronous HTTP GET request, suppressing native exceptions for manual error handling.
@@ -37,7 +36,7 @@ function searchGoogleCustom(query) {
     return "No results found.";
   } catch (e) {
     // Catch network or parsing errors and inform the AI so it can reason around the failure.
-    return "Search failed: " + e.message;
+    return `[searchGoogleCustom] Search failed: ${JSON.stringify(e)}`;
   }
 }
 
@@ -48,11 +47,10 @@ function searchGoogleCustom(query) {
  */
 function findRecipeImage(title) {
   // Append specialized search modifiers to ensure the image meets aesthetic formatting standards.
-  const query = encodeURIComponent(title + ' food photography high resolution');
+  const query = encodeURIComponent(`${title} food photography high resolution`);
 
   // Construct the URL with specific parameters for image-only retrieval (searchType=image) and limit to 1 result.
-  const url = 'https://www.googleapis.com/customsearch/v1?key=' + CONFIG.SEARCH_API_KEY +
-    '&cx=' + CONFIG.SEARCH_CX + '&searchType=image&q=' + query + '&num=1';
+  const url = `https://www.googleapis.com/customsearch/v1?key=${CONFIG.SEARCH_API_KEY}&cx=${CONFIG.SEARCH_CX}&searchType=image&q=${query}&num=1`;
 
   try {
     // Execute the HTTP GET request.
@@ -63,7 +61,7 @@ function findRecipeImage(title) {
     return result.items && result.items.length > 0 ? result.items[0].link : null;
   } catch (e) {
     // Log the failure to the developer console but do not throw, allowing the system to degrade gracefully.
-    console.warn('Image search failed: ' + e.message);
+    console.warn(`[findRecipeImage] Image search failed: ${JSON.stringify(e)}`);
     return null;
   }
 }
@@ -77,9 +75,8 @@ function findRecipeImagesBulk(titles) {
   if (!titles || titles.length === 0) return [];
 
   const requests = titles.map(function(title) {
-    const query = encodeURIComponent(title + ' food photography high resolution');
-    const url = 'https://www.googleapis.com/customsearch/v1?key=' + CONFIG.SEARCH_API_KEY +
-      '&cx=' + CONFIG.SEARCH_CX + '&searchType=image&q=' + query + '&num=1';
+    const query = encodeURIComponent(`${title} food photography high resolution`);
+    const url = `https://www.googleapis.com/customsearch/v1?key=${CONFIG.SEARCH_API_KEY}&cx=${CONFIG.SEARCH_CX}&searchType=image&q=${query}&num=1`;
 
     return {
       url: url,
@@ -97,7 +94,7 @@ function findRecipeImagesBulk(titles) {
       return "";
     });
   } catch (e) {
-    console.warn('Bulk image search failed: ' + e.message);
+    console.warn(`[findRecipeImagesBulk] Bulk image search failed: ${JSON.stringify(e)}`);
     return titles.map(function() { return ""; });
   }
 }
