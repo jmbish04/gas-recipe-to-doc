@@ -89,7 +89,7 @@ function executeAgentStep(messages, isFallback = false) {
 
   if (isFallback) {
       actualModel = `${actualModel.replace('workers-ai/', '')}`; 
-      endpointUrl = `${CLOUDFLARE_WORKERS_AI_URL}/${actualModel}`;
+      endpointUrl = `${CONFIG.CLOUDFLARE_WORKERS_AI_URL}/${actualModel}`;
       headers = {
           'Authorization': `Bearer ${CONFIG.CLOUDFLARE_AI_GATEWAY_TOKEN}`
       };
