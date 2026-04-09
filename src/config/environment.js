@@ -18,7 +18,10 @@ const CF_AIG_TOKEN = scriptProps.getProperty('CLOUDFLARE_AI_GATEWAY_TOKEN');
 const CF_AIG_SLUG = scriptProps.getProperty('CLOUDFLARE_AI_GATEWAY_SLUG') || 'default-gateway';
 
 // Extract the Cloudflare Browser Render API Token used for scraping recipe website content to markdown and to extract the prepared dish photo.
-const CF_BROWSER_RENDER_TOKEN = scriptProps.getProperty('CLOUDFLARE_IMAGES_STREAM_TOKEN');
+const CF_BROWSER_RENDER_TOKEN = scriptProps.getProperty('CLOUDFLARE_BROWSER_RENDER_TOKEN');
+
+// Extract the Cloudflare Images API Token used for hosting recipe prepared dish photos.
+const CF_IMAGES_API_TOKEN = scriptProps.getProperty('CLOUDFLARE_IMAGES_STREAM_TOKEN');
 
 // Retrieve the Google Custom Search API Key for web scraping capabilities.
 const SEARCH_API_KEY = scriptProps.getProperty('SEARCH_API_KEY');
@@ -45,6 +48,8 @@ const CONFIG = {
   // Map the AIG Token to the internal key representation.
   CLOUDFLARE_AI_GATEWAY_KEY: CF_AIG_TOKEN,
   // Map the Browser Render API Token to the internal key representation.
+  CLOUDFLARE_BROWSER_RENDER_TOKEN: CF_BROWSER_RENDER_TOKEN,
+  // Map the Images API Token to the internal key representation.
   CLOUDFLARE_IMAGES_STREAM_TOKEN: CF_BROWSER_RENDER_TOKEN,
 
   // Define the designated Agent LLM. Using the OpenAI interface structure for guaranteed tool calling compliance.
