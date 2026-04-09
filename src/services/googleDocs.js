@@ -98,16 +98,15 @@ function applyShrinkToFit(doc, textElement, text) {
 }
 
 /**
- * Safely replaces a placeholder with a list.
- * Self-Healing: Prevents structural exceptions if placeholder is the terminal paragraph.
+ * Safely replaces a placeholder with a list and handles structural integrity.
  */
 function replacePlaceholderWithList(body, placeholder, items, glyphType, parseBold = false) {
   const rangeElement = body.findText(placeholder);
   if (!rangeElement) return;
 
   const element = rangeElement.getElement();
-  const container = element.getParent(); 
-  const parent = container.getParent(); 
+  const container = element.getParent();
+  const parent = container.getParent();
   const index = parent.getChildIndex(container);
 
   if (items && items.length > 0) {
@@ -116,13 +115,8 @@ function replacePlaceholderWithList(body, placeholder, items, glyphType, parseBo
       listItem.setGlyphType(glyphType);
       if (parseBold) processMarkdownBold(listItem.editAsText(), item);
     });
-
-    try {
-      container.removeFromParent();
-    } catch (e) {
-      // Structure Error Catch: If it's the last element, clear text instead of deleting.
-      element.asText().setText(""); 
-    }
+    // Structural Safety: Never leave a section without a paragraph
+    try { container.removeFromParent(); } catch (e) { element.asText().setText(""); }
   } else {
     element.asText().setText("");
   }
@@ -151,10 +145,9 @@ function processMarkdownBold(textElement, rawText) {
 }
 
 /**
- * Cloudflare Image logic for persistence.
+ * Enhanced Image Injection: Specifically targets the Prepared Dish photo.
  */
 function processCloudflareImage(body, recipe) {
-  const token = CONFIG.CLOUDFLARE_IMAGES_STREAM_TOKEN;
   let finalImageUrl = recipe.imageUrl;
   if (!finalImageUrl) {
     body.replaceText('{{IMAGE}}', '');
@@ -162,27 +155,26 @@ function processCloudflareImage(body, recipe) {
   }
 
   try {
-    const cfApiUrl = CONFIG.CLOUDFLARE_IMAGES_URL;
-    const uploadResponse = UrlFetchApp.fetch(cfApiUrl, {
-      method: 'post',
-      headers: { 'Authorization': 'Bearer ' + token },
-      payload: { url: finalImageUrl, metadata: JSON.stringify({ title: recipe.title }) }
-    });
-
-    const result = JSON.parse(uploadResponse.getContentText());
-    if (result.success) finalImageUrl = result.result.variants[0];
-
-    const resp = UrlFetchApp.fetch(finalImageUrl);
+    // 1. Fetch the image blob from the Search/Cloudflare URL
+    const imgResp = UrlFetchApp.fetch(finalImageUrl, { muteHttpExceptions: true });
+    if (imgResp.getResponseCode() !== 200) throw new Error("Image fetch failed");
+    
+    const blob = imgResp.getBlob();
     const placeholder = body.findText('{{IMAGE}}');
+
     if (placeholder) {
-      const img = placeholder.getElement().getParent().asParagraph().insertInlineImage(0, resp.getBlob());
-      const width = 450;
-      const height = Math.round((img.getHeight() / (img.getWidth() || 1)) * width);
-      img.setWidth(width).setHeight(height);
+      const para = placeholder.getElement().getParent().asParagraph();
+      const img = para.insertInlineImage(0, blob);
+      
+      // Senior Engineer Aesthetic: Standardized Hero Width
+      const targetWidth = 480;
+      const ratio = targetWidth / img.getWidth();
+      img.setWidth(targetWidth).setHeight(Math.round(img.getHeight() * ratio));
+      
       placeholder.getElement().asText().setText('');
     }
   } catch (e) {
-    console.log(`[processCloudflareImage] ${JSON.stringify(e)}`);
-    body.replaceText('{{IMAGE}}', '[Image Load Error]');
+    console.warn(`[processCloudflareImage] Failed: ${e.message}`);
+    body.replaceText('{{IMAGE}}', '');
   }
 }
