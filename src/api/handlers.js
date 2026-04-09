@@ -59,3 +59,23 @@ function doPost(e) {
     })).setMimeType(ContentService.MimeType.JSON);
   }
 }
+
+/**
+ * Executes a tool remotely via google.script.run for the frontend step-by-step chat flow.
+ * @param {string} toolName - The name of the tool to execute.
+ * @param {string} argsStr - The JSON stringified arguments for the tool.
+ * @returns {string} The result of the tool execution as a string.
+ */
+function executeTool(toolName, argsStr) {
+  try {
+    const args = JSON.parse(argsStr);
+    const dispatcher = TOOL_DISPATCHER[toolName];
+    if (dispatcher) {
+      return dispatcher(args);
+    } else {
+      return "Unknown tool requested.";
+    }
+  } catch (err) {
+    return "Error executing tool: " + err.message;
+  }
+}

@@ -231,6 +231,15 @@
     // ─── MessageBubble Component ──────────────────────────────────────────────
     function MessageBubble({ message }) {
       const isUser = message.role === 'user';
+      if (message.type === 'progress') {
+         return (
+          <div className="flex justify-start mb-3 fade-in">
+            <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl rounded-tl-sm bg-zinc-800 text-emerald-400 text-sm border border-emerald-900/30">
+              <SpinnerIcon size={14} /><span>{message.content}</span>
+            </div>
+          </div>
+         );
+      }
 
       if (message.type === 'recipes' && message.recipes && message.recipes.length > 0) {
         return (
@@ -484,19 +493,83 @@
 
         try {
           // Build clean message history for the AI
-          const aiMessages = [...messages, { role: 'user', content: text }]
-            .filter(m => m.type !== 'error')
-            .map(m => ({ role: m.role, content: m.content }));
+          let aiMessages = [...messages, { role: 'user', content: text }]
+            .filter(m => m.type !== 'error' && m.type !== 'progress')
+            .map(m => {
+                let msg = { role: m.role, content: m.content || "" };
+                if (m.tool_calls) msg.tool_calls = m.tool_calls;
+                if (m.tool_call_id) {
+                    msg.tool_call_id = m.tool_call_id;
+                    msg.name = m.name;
+                }
+                return msg;
+            });
 
-          const responseJson = await runScript('chatWithAI', aiMessages);
-          const response = JSON.parse(responseJson);
+          let isFinal = false;
+          let breaker = 0; // prevent infinite loops
 
-          if (response.proposals && response.proposals.length > 0) {
-            addMessage({ role: 'assistant', type: 'recipes', content: response.message, recipes: response.proposals });
-          } else if (response.type === 'recipe' && response.recipe) {
-            addMessage({ role: 'assistant', type: 'recipe', content: response.message, recipe: response.recipe });
-          } else {
-            addMessage({ role: 'assistant', type: 'text', content: response.message || String(response) });
+          while (!isFinal && breaker < 10) {
+              breaker++;
+              const responseStr = await runScript('chatWithAI_step', aiMessages);
+              let response;
+              try {
+                  response = JSON.parse(responseStr);
+              } catch (e) {
+                 throw new Error("Failed to parse response: " + responseStr);
+              }
+
+              if (response.type === 'tool_calls') {
+                  // Add the assistant message with tool calls to context
+                  aiMessages.push(response.message);
+
+                  // Process each tool call
+                  for (let tool of response.tools) {
+                      let progressText = `Executing ${tool.function.name}...`;
+                      if (tool.function.name === 'search_web') {
+                          try {
+                             let query = JSON.parse(tool.function.arguments).query;
+                             progressText = `Searching web for "${query}"...`;
+                          } catch(e) {}
+                      } else if (tool.function.name === 'capture_recipe_data') {
+                          progressText = `Extracting recipe details...`;
+                      } else if (tool.function.name === 'propose_recipes') {
+                          progressText = `Preparing recipe options...`;
+                      } else if (tool.function.name === 'search_image') {
+                          progressText = `Searching for images...`;
+                      }
+
+                      // Show progress in UI (use a unique id)
+                      const progressId = Date.now() + Math.random();
+                      setMessages(prev => [...prev, { id: progressId, role: 'assistant', type: 'progress', content: progressText }]);
+
+                      // Execute tool locally by calling backend
+                      const toolResult = await runScript('executeTool', tool.function.name, tool.function.arguments);
+
+                      // Remove progress indicator
+                      setMessages(prev => prev.filter(m => m.id !== progressId));
+
+                      // Append tool result to context
+                      aiMessages.push({
+                          role: "tool",
+                          tool_call_id: tool.id,
+                          name: tool.function.name,
+                          content: toolResult
+                      });
+                  }
+              } else if (response.type === 'final') {
+                  isFinal = true;
+                  const finalRes = response.response;
+                  if (finalRes.proposals && finalRes.proposals.length > 0) {
+                    addMessage({ role: 'assistant', type: 'recipes', content: finalRes.message, recipes: finalRes.proposals });
+                  } else if (finalRes.type === 'recipe' && finalRes.recipe) {
+                    addMessage({ role: 'assistant', type: 'recipe', content: finalRes.message, recipe: finalRes.recipe });
+                  } else {
+                    addMessage({ role: 'assistant', type: 'text', content: finalRes.message || String(finalRes) });
+                  }
+              } else {
+                  isFinal = true;
+                  addMessage({ role: 'assistant', type: 'error', content: 'Unexpected response type.' });
+              }
           }
         } catch (err) {
           addMessage({ role: 'assistant', type: 'error', content: err.message || 'Something went wrong. Please try again.' });

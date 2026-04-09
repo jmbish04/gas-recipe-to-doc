@@ -10,23 +10,28 @@
  * @param {Array} messages - Array of prior {role, content} conversation objects.
  * @returns {string} The serialized JSON response matching the strict RESPONSE_FORMAT schema.
  */
-function chatWithAI(messages) {
-  // Prepend the static system prompt to the message history to anchor the agent's behavior.
-  const fullMessages = [
-    { role: 'system', content: SYSTEM_PROMPT },
-    ...messages
-  ];
+function chatWithAI_step(messages) {
+  // If this is the first message in the flow, prepend the static system prompt.
+  let fullMessages = messages;
+  if (!messages || messages.length === 0 || messages[0].role !== 'system') {
+    fullMessages = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...messages
+    ];
+  }
 
   // Extract the most recent user message from the array for auditing purposes.
   const lastUserMsg = [...messages].reverse().find(function(m) { return m.role === 'user'; });
 
-  // If a valid user message exists, log it to the audit sheet asynchronously.
-  if (lastUserMsg) {
-    _logToSheet_('chat', 'User Input', lastUserMsg.content, '');
+  // If a valid user message exists and we are at the start of a flow (only system + user message)
+  if (lastUserMsg && fullMessages.length === 2) {
+    try {
+        _logToSheet_('chat', 'User Input', lastUserMsg.content, '');
+    } catch (e) {}
   }
 
-  // Pass the enriched message array into the recursive execution engine.
-  return executeAgentLoop(fullMessages);
+  // Pass the enriched message array into the step execution engine.
+  return executeAgentStep(fullMessages);
 }
 
 // Tool Dispatch Map definition for better code maintainability
@@ -52,17 +57,7 @@ const TOOL_DISPATCHER = {
  * @param {number} depth - The current recursion depth to prevent infinite loops (Circuit Breaker).
  * @returns {string} The final JSON string payload.
  */
-function executeAgentLoop(messages, depth = 0) {
-  // Circuit breaker: Prevent infinite execution loops by capping recursion at 5 depths.
-  if (depth > 5) {
-    // Return a safe, schema-compliant fallback response if the depth limit is exceeded.
-    return JSON.stringify({
-      message: "I reached my maximum tool execution limit. Please try your request again.",
-      options: [],
-      doc_url: ""
-    });
-  }
-
+function executeAgentStep(messages) {
   // Construct the payload utilizing OpenAI standard parameters compatible with CF AI Gateway.
   const payload = {
     model: CONFIG.AI_MODEL,
@@ -115,85 +110,51 @@ function executeAgentLoop(messages, depth = 0) {
   // Evaluate if the model has requested to invoke any functions/tools.
   if (message.tool_calls && message.tool_calls.length > 0) {
 
-    // Explicitly handle propose_recipes to short-circuit the execution
+    // Explicitly handle propose_recipes to short-circuit the execution and return final result
     const proposeToolCall = message.tool_calls.find(function(t) { return t.function.name === 'propose_recipes'; });
 
     if (proposeToolCall) {
       try {
         const args = JSON.parse(proposeToolCall.function.arguments);
-        const recipes = args.recipes || [];
+        let recipes = args.recipes || [];
 
-        // Fetch images in bulk for optimization
-        const titles = recipes.map(function(r) { return r.title; });
-        const imageUrls = findRecipeImagesBulk(titles);
-
-        const enrichedRecipes = recipes.map(function(recipe, index) {
-          recipe.imageUrl = imageUrls[index] || "";
-          return recipe;
-        });
+        // Enrich the recipes with images using the new pipeline logic
+        recipes = enrichRecipesWithImages(recipes);
 
         // Return structured proposals directly to frontend
         return JSON.stringify({
-          message: "Here are some options I found for you.",
-          proposals: enrichedRecipes,
-          doc_url: ""
+          type: "final",
+          response: {
+             message: "Here are some options I found for you.",
+             proposals: recipes,
+             doc_url: ""
+          }
         });
       } catch (err) {
-        // Fallback if parsing fails
-        messages.push({
-          role: "tool",
-          tool_call_id: proposeToolCall.id,
-          name: proposeToolCall.function.name,
-          content: "Error executing tool: " + err.message
-        });
+         // Fallback if parsing fails
+         messages.push({
+             role: "assistant",
+             tool_calls: message.tool_calls
+         });
+         messages.push({
+           role: "tool",
+           tool_call_id: proposeToolCall.id,
+           name: proposeToolCall.function.name,
+           content: "Error executing tool: " + err.message
+         });
+         return JSON.stringify({ type: "tool_calls", message: message, messages: messages, tools: message.tool_calls });
       }
     } else {
-      // 1. Append the model's tool request to the message history to maintain conversational continuity.
-      messages.push({
-        role: message.role,
-        content: message.content || "",
-        tool_calls: message.tool_calls
-      });
-
-      // 2. Iterate over each requested tool call and execute the corresponding localized function.
-      message.tool_calls.forEach(function(toolCall) {
-        let resultContent = "";
-        try {
-          // Parse the stringified JSON arguments provided by the model.
-          const args = JSON.parse(toolCall.function.arguments);
-
-          // Use dispatch object for scalable routing of execution
-          const dispatcher = TOOL_DISPATCHER[toolCall.function.name];
-          if (dispatcher) {
-            resultContent = dispatcher(args);
-          } else {
-            // Handle hallucinated or unsupported tool names.
-            resultContent = "Unknown tool requested.";
-          }
-        } catch (err) {
-          // Catch localized execution errors and feed them back to the AI so it can attempt a correction.
-          resultContent = "Error executing tool: " + err.message;
-        }
-
-        // 3. Append the execution results back into the context window under the 'tool' role.
-        messages.push({
-          role: "tool",
-          tool_call_id: toolCall.id,
-          name: toolCall.function.name,
-          content: resultContent
-        });
-      });
-
-      // 4. Recurse into the loop, providing the gateway with the updated context window containing tool results.
-      return executeAgentLoop(messages, depth + 1);
+        messages.push(message);
+        return JSON.stringify({ type: "tool_calls", message: message, messages: messages, tools: message.tool_calls });
     }
   }
 
   // Ensure we always return valid JSON to the client
   try {
-    JSON.parse(message.content);
-    return message.content;
+    const finalData = JSON.parse(message.content);
+    return JSON.stringify({ type: "final", response: finalData });
   } catch (_) {
-    return JSON.stringify({ message: message.content || "", options: [], doc_url: "" });
+    return JSON.stringify({ type: "final", response: { message: message.content || "", proposals: [], doc_url: "" } });
   }
 }

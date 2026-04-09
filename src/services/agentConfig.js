@@ -72,7 +72,7 @@ const RESPONSE_FORMAT = {
               imageUrl: { type: "string" }
             },
             required: [
-              "title", "description", "prepTime", "cookTime", "servings", "ingredients", "instructions", 
+              "title", "description", "prepTime", "cookTime", "servings", "ingredients", "instructions",
               "culinaryScience", "restaurantTechniques", "troubleshooting", "chefInsights", "sourceUrl", "imageUrl"
             ],
             additionalProperties: false
@@ -125,7 +125,8 @@ const TOOLS = [
                 cookTime: { type: "string", description: "e.g., '30 mins'" },
                 servings: { type: "string", description: "e.g., '4'" },
                 ingredients: { type: "array", items: { type: "string" } },
-                instructions: { type: "array", items: { type: "string" } }
+                instructions: { type: "array", items: { type: "string" } },
+                sourceUrl: { type: "string" }
               },
               required: ["title", "description", "prepTime", "cookTime", "servings", "ingredients", "instructions"],
               additionalProperties: false
@@ -152,6 +153,7 @@ const TOOLS = [
           servings: { type: "string" },
           ingredients: { type: "array", items: { type: "string" } },
           instructions: { type: "array", items: { type: "string" } },
+          sourceUrl: { type: "string" },
           imageUrl: { type: "string", description: "Optional URL of the recipe image. Pass empty string if none." }
         },
         required: ["title", "description", "prepTime", "cookTime", "servings", "ingredients", "instructions", "imageUrl"],
