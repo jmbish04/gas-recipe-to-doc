@@ -42,7 +42,7 @@ function scrapeImagesFromUrl(targetUrl) {
     const responseBody = response.getContentText();
 
     if (statusCode >= 400) {
-      throw new Error(`Cloudflare API Error (${statusCode}): ${responseBody}`);
+      throw new Error(`[scrapeImagesFromUrl] Cloudflare API Error (${statusCode}): ${responseBody}`);
     }
 
     const data = JSON.parse(responseBody);
@@ -84,7 +84,7 @@ function getRecipeImageUrl(recipeName) {
   const searchEngineId = CONFIG.SEARCH_CX;
   
   if (!recipeName) {
-    throw new Error(`Missing required parameter: recipeName. We received ${recipeName}`);
+    throw new Error(`[getRecipeImageUrl] Missing required parameter: recipeName. We received ${recipeName}`);
   }
 
   const searchQuery = encodeURIComponent(`${recipeName} prepared dish plated food photography`);
@@ -145,7 +145,7 @@ function uploadToCloudflareImages(rawImageBlob) {
     const cfResponseBody = cfResponse.getContentText();
 
     if (cfStatusCode >= 400) {
-      throw new Error(`Cloudflare Images API Error (${cfStatusCode}): ${cfResponseBody}`);
+      throw new Error(`[uploadToCloudflareImages] Cloudflare Images API Error (${cfStatusCode}): ${cfResponseBody}`);
     }
 
     const cfData = JSON.parse(cfResponseBody);
@@ -158,7 +158,10 @@ function uploadToCloudflareImages(rawImageBlob) {
       throw new Error("[uploadToCloudflareImages] No variants returned from Cloudflare Images.");
     }
 
-    return variants.find(v => v.endsWith("/public")) || variants[0];
+    const CLOUDFLARE_IMAGES_URL = variants.find(v => v.endsWith("/public")) || variants[0];
+    console.log(`[uploadToCloudflareImages] Images successfully uploaded to cloudflare images api: ${CLOUDFLARE_IMAGES_URL}`);
+    
+    return CLOUDFLARE_IMAGES_URL;
 }
 
 /**
@@ -168,12 +171,6 @@ function uploadToCloudflareImages(rawImageBlob) {
  * @returns {Array} - The recipes augmented with Cloudflare delivery image URLs.
  */
 function enrichRecipesWithImages(recipes) {
-  
-  const CLOUDFLARE_ACCOUNT_ID = CONFIG.CLOUDFLARE_ACCOUNT_ID;
-  const CLOUDFLARE_BROWSER_TOKEN = CONFIG.CLOUDFLARE_BROWSER_RENDER_TOKEN;
-  const CLOUDFLARE_IMAGES_TOKEN = CONFIG.CLOUDFLARE_IMAGES_STREAM_TOKEN;
-  const SEARCH_API_KEY = CONFIG.SEARCH_API_KEY;
-  const SEARCH_ENGINE_ID = CONFIG.SEARCH_CX;
 
   // For each recipe, try to get a raw image URL first
   const rawUrls = recipes.map(recipe => {
@@ -182,10 +179,14 @@ function enrichRecipesWithImages(recipes) {
     // 1. If we have a source URL, attempt to scrape image
     if (recipe.sourceUrl) {
       try {
+        console.log(`[enrichRecipesWithImages] Scraping Recipe Url: ${recipe.sourceUrl}`);
+        
         const scrapedImages = scrapeImagesFromUrl(recipe.sourceUrl);
+        
         if (scrapedImages && scrapedImages.length > 0) {
             // Select the most likely hero image - could be first large one, for now pick first
             rawUrl = scrapedImages[0];
+            console.log(`[enrichRecipesWithImages] Select the most likely hero image - could be first large one, for now pick first: ${rawUrl}`);
         }
       } catch (err) {
         console.warn(`[enrichRecipesWithImages] Scraping failed for ${recipe.sourceUrl}: ${JSON.stringify(err)}`);
