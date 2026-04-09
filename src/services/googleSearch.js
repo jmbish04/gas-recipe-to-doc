@@ -67,3 +67,37 @@ function findRecipeImage(title) {
     return null;
   }
 }
+
+/**
+ * Searches the Google Custom Search Image index for multiple recipe titles concurrently.
+ * @param {string[]} titles - Array of recipe titles to search for.
+ * @returns {string[]} Array of image URLs corresponding to the titles (or empty string if not found).
+ */
+function findRecipeImagesBulk(titles) {
+  if (!titles || titles.length === 0) return [];
+
+  const requests = titles.map(function(title) {
+    const query = encodeURIComponent(title + ' food photography high resolution');
+    const url = 'https://www.googleapis.com/customsearch/v1?key=' + CONFIG.SEARCH_API_KEY +
+      '&cx=' + CONFIG.SEARCH_CX + '&searchType=image&q=' + query + '&num=1';
+
+    return {
+      url: url,
+      muteHttpExceptions: true
+    };
+  });
+
+  try {
+    const responses = UrlFetchApp.fetchAll(requests);
+    return responses.map(function(response) {
+      if (response.getResponseCode() === 200) {
+        const result = JSON.parse(response.getContentText());
+        return result.items && result.items.length > 0 ? result.items[0].link : "";
+      }
+      return "";
+    });
+  } catch (e) {
+    console.warn('Bulk image search failed: ' + e.message);
+    return titles.map(function() { return ""; });
+  }
+}

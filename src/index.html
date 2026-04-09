@@ -232,7 +232,24 @@
     function MessageBubble({ message }) {
       const isUser = message.role === 'user';
 
-      if (message.type === 'recipe' && message.recipe) {
+      if (message.type === 'recipes' && message.recipes && message.recipes.length > 0) {
+        return (
+          <div className="flex justify-start mb-4 fade-in">
+            <div className="flex flex-col gap-3 max-w-[92%] w-full">
+              {message.content && (
+                <div className="self-start px-4 py-2.5 rounded-2xl rounded-tl-sm bg-zinc-800 text-zinc-100 text-sm max-w-prose">
+                  {message.content}
+                </div>
+              )}
+              <div className="flex flex-col gap-4">
+                {message.recipes.map((recipe, idx) => (
+                  <RecipeCard key={idx} recipe={recipe} />
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      } else if (message.type === 'recipe' && message.recipe) {
         return (
           <div className="flex justify-start mb-4 fade-in">
             <div className="flex flex-col gap-2 max-w-[92%] w-full">
@@ -474,7 +491,9 @@
           const responseJson = await runScript('chatWithAI', aiMessages);
           const response = JSON.parse(responseJson);
 
-          if (response.type === 'recipe' && response.recipe) {
+          if (response.proposals && response.proposals.length > 0) {
+            addMessage({ role: 'assistant', type: 'recipes', content: response.message, recipes: response.proposals });
+          } else if (response.type === 'recipe' && response.recipe) {
             addMessage({ role: 'assistant', type: 'recipe', content: response.message, recipe: response.recipe });
           } else {
             addMessage({ role: 'assistant', type: 'text', content: response.message || String(response) });

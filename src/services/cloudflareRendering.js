@@ -1,0 +1,114 @@
+/**
+ * @fileoverview Cloudflare Browser Rendering Integration
+ * @module services/cloudflareRendering
+ * @description Extracts recipe markdown and captures a screenshot of the finished dish
+ * using Cloudflare Browser Rendering API.
+ */
+
+/**
+ * Extracts recipe markdown and captures a screenshot of the finished dish
+ * using Cloudflare Browser Rendering API.
+ * @param {string} targetUrl - The recipe URL to process.
+ * @returns {string} Result message indicating success or failure.
+ */
+function captureRecipeData(targetUrl) {
+  // --- CONFIGURATION ---
+  const props = PropertiesService.getScriptProperties();
+  const CLOUDFLARE_ACCOUNT_ID = props.getProperty('CLOUDFLARE_ACCOUNT_ID');
+  const CLOUDFLARE_API_TOKEN = props.getProperty('CLOUDFLARE_BROWSER_RENDER_TOKEN');
+
+  if (!targetUrl) {
+    return "Error: No URL provided for capturing recipe data.";
+  }
+
+  // --- EXECUTION ---
+  try {
+    // 1. Extract Markdown (Text & Structure)
+    const markdownContent = fetchCloudflareMarkdown(targetUrl, CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN);
+
+    // 2. Capture Screenshot (Visual of the finished food)
+    // We use a mobile-like viewport to focus on the "Hero" image usually at the top
+    const imageBlob = fetchCloudflareScreenshot(targetUrl, CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN);
+
+    // 3. Save to Google Drive (Example Output)
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const folder = DriveApp.createFolder(`Recipe_Capture_${timestamp}`);
+
+    folder.createFile('recipe.md', markdownContent);
+    folder.createFile(imageBlob).setName('finished_dish.png');
+
+    const message = 'Success! Files saved to Drive folder: ' + folder.getName() + ' with ID: ' + folder.getId();
+    Logger.log(message);
+    return message;
+
+  } catch (e) {
+    const errorMsg = 'Error capturing recipe data: ' + e.toString();
+    Logger.log(errorMsg);
+    return errorMsg;
+  }
+}
+
+/**
+ * Calls Cloudflare /markdown endpoint
+ */
+function fetchCloudflareMarkdown(url, accountId, token) {
+  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${accountId}/browser-rendering/markdown`;
+
+  const options = {
+    'method': 'post',
+    'headers': {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    'payload': JSON.stringify({
+      'url': url
+    }),
+    'muteHttpExceptions': true
+  };
+
+  const response = UrlFetchApp.fetch(endpoint, options);
+
+  if (response.getResponseCode() !== 200) {
+    throw new Error(`Markdown API Failed: ${response.getContentText()}`);
+  }
+
+  const contentType = response.getHeaders()['Content-Type'] || '';
+  if (contentType.includes('json')) {
+    const json = JSON.parse(response.getContentText());
+    return json.result || json;
+  }
+
+  return response.getContentText();
+}
+
+/**
+ * Calls Cloudflare /screenshot endpoint
+ */
+function fetchCloudflareScreenshot(url, accountId, token) {
+  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${accountId}/browser-rendering/screenshot`;
+
+  const options = {
+    'method': 'post',
+    'headers': {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    'payload': JSON.stringify({
+      'url': url,
+      'viewport': {
+        'width': 1080,   // Square-ish width for high quality
+        'height': 1080   // Height enough to likely capture the main hero image
+      },
+      'fullPage': false  // Set false to capture just the viewport (hero image), true for whole recipe
+    }),
+    'muteHttpExceptions': true
+  };
+
+  const response = UrlFetchApp.fetch(endpoint, options);
+
+  if (response.getResponseCode() !== 200) {
+    throw new Error(`Screenshot API Failed: ${response.getContentText()}`);
+  }
+
+  return response.getBlob();
+}
