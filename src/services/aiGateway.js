@@ -8,6 +8,7 @@
 /**
  * Initializes the AI conversation and serves as the primary entry point for client RPC calls.
  * @param {Array} messages - Array of prior {role, content} conversation objects.
+ * @param {boolean} isFallback - Whether this call is a retry using the fallback model.
  * @returns {string} The serialized JSON response matching the strict RESPONSE_FORMAT schema.
  */
 function chatWithAI_step(messages, isFallback = false) {
@@ -54,7 +55,7 @@ const TOOL_DISPATCHER = {
 /**
  * Recursively resolves tool calls from the AI model until a final structured output is reached.
  * @param {Array} messages - The cumulative message history including tool request/response pairs.
- * @param {number} depth - The current recursion depth to prevent infinite loops (Circuit Breaker).
+ * @param {boolean} isFallback - Flag to trigger Cloudflare Workers AI direct failover.
  * @returns {string} The final JSON string payload.
  */
 function executeAgentStep(messages, isFallback = false) {
@@ -87,14 +88,14 @@ function executeAgentStep(messages, isFallback = false) {
   };
 
   if (isFallback) {
-      actualModel = `${actualModel.replace('workers-ai/', '')}`; // Cloudflare API (ai/run) does not prepend models with `workers-ai`.
+      actualModel = `${actualModel.replace('workers-ai/', '')}`; 
       endpointUrl = `${CLOUDFLARE_WORKERS_AI_URL}/${actualModel}`;
       headers = {
           'Authorization': `Bearer ${CONFIG.CLOUDFLARE_AI_GATEWAY_TOKEN}`
       };
-    
+      
       console.log(`[executeAgentStep] workers-ai fallback model: "${CONFIG.AI_MODEL_FALLBACK_NAME}"; Running as ${endpointUrl}`);    
-    
+      
       delete payload.model;
   }
 
@@ -120,6 +121,7 @@ function executeAgentStep(messages, isFallback = false) {
           fallbackModel: CONFIG.AI_MODEL_FALLBACK_NAME
         }
       );
+    }
     throw new Error(`[executeAgentStep] AI Gateway error (${responseCode}): ${responseText}`);
   }
 
