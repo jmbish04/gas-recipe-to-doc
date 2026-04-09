@@ -591,8 +591,8 @@ const sendMessage = useCallback(async () => {
 
         if (response.type === 'fallback') {
             console.warn(`[sendMessage] STEP: Primary model failed, triggering fallback (+${Date.now() - loopStartTime}ms)`);
-            logClientTelemetry(sendMessage, 'AI Model Fallback Triggered', { error: response.error, fallbackModel: response.fallbackModel });
-            addMessage({ role: 'assistant', type: 'error', content: `Primary AI model failed (${response.error}). Falling back to ${response.fallbackModel}...` });
+            logClientTelemetry(sendMessage, 'AI Model Fallback Triggered', { error: response.error, primaryModel: response.primaryModel, fallbackModel: response.fallbackModel });
+            addMessage({ role: 'assistant', type: 'error', content: `Primary AI model (${response.primaryModel}) failed (${response.error}). Falling back to ${response.fallbackModel}...` });
             isFallback = true;
             continue;
         }
