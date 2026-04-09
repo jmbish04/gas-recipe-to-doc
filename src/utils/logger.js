@@ -26,6 +26,25 @@ function logExport(recipeData, docUrl) {
 }
 
 /**
+ * Formats and logs console telemetry.
+ * @param {string} functionName - The function name where the message is being logged from.
+ * @param {string} errorMessage - The pretty error message.
+ * @param {object} errorObject - The error object caught in the handler.
+ */
+function logTelemetry(functionName, errorMessage, errorObject) {
+  const timestamp = Utilities.
+  // Serialize specific metadata fields to prevent sheet cell bloat while retaining analytics value.
+  const details = JSON.stringify({
+    functionName,
+    errorMessage,
+    errorObject
+  });
+
+  // Hand off the formatted payload to the internal raw logging function.
+  _logTelemetryToSheet_(functionName, errorMessage, details);
+}
+
+/**
  * Retrieves the paginated history of search and export events for the frontend UI.
  * @returns {string} A JSON serialized array of normalized history objects, sorted newest-first.
  */
@@ -94,6 +113,38 @@ function _logToSheet_(type, name, details, url) {
     sheet.appendRow([new Date(), type, name, details, url]);
   } catch (logErr) {
     // Suppress catastrophic failure. Telemetry errors should NEVER crash the main execution loop.
-    console.error('Failed to log to sheet: ' + logErr.message);
+    console.error(`[_logToSheet_] Failed to log to sheet "${CONFIG.HISTORY_SHEET_NAME}": ${JSON.stringify(logErr)}`);
+  }
+}
+
+/**
+ * Internal raw logging utility. Handles direct telemetry writes to the Google Sheet.
+ * @private
+ * @param {string} functionName - The function name where the message was sent to console.
+ * @param {string} errorMessage - The Pretty prepared error message.
+ * @param {string} details - Secondary metadata or serialized context.
+ */
+function _logTelemetryToSheet_(functionName, errorMessage, details) {
+  try {
+    // Open the master logging spreadsheet. (Hardcoded per requirement)
+    const ss = SpreadsheetApp.openById(CONFIG.LOG_SHEET_ID);
+
+    // Attempt to resolve the specific worksheet.
+    let sheet = ss.getSheetByName(CONFIG.TELEMETRY_SHEET_NAME);
+
+    // Implement an auto-healing mechanism: if the sheet was deleted, recreate it instantly.
+    if (!sheet) {
+      sheet = ss.insertSheet(CONFIG.TELEMETRY_SHEET_NAME);
+      // Inject standard column headers for the newly created sheet.
+      sheet.appendRow(['Timestamp', 'Function Name', 'Error Message', 'Details']);
+      // Freeze the top row to lock headers for visual scrolling.
+      sheet.setFrozenRows(1);
+    }
+
+    // Append the telemetry data array directly to the bottom of the active sheet.
+    sheet.appendRow([new Date(), functionName, errorMessage, details]);
+  } catch (logErr) {
+    // Suppress catastrophic failure. Telemetry errors should NEVER crash the main execution loop.
+    console.error(`[_logTelemetryToSheet_] Failed to log to sheet "${CONFIG.TELEMETRY_SHEET_NAME}": ${JSON.stringify(logErr)}`);
   }
 }
