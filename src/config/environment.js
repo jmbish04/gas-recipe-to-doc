@@ -35,6 +35,8 @@ const SEARCH_CX = scriptProps.getProperty('SEARCH_CX');
 
 // Define the core application configuration, locking down structural IDs and API endpoints.
 const CONFIG = {
+  // Session ID -- for traceability 
+  SESSION_ID: Utilities.getUuid(), 
   // Google Drive template ID for the recipe document.
   TEMPLATE_ID: scriptProps.getProperty('TEMPLATE_ID'),
   // Target Google Drive folder ID where newly generated recipes will be stored.
