@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Recipe Assistant</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            border: '#27272a',
+            input: '#27272a',
+            ring: '#52525b',
+            background: '#09090b',
+            foreground: '#fafafa',
+            card: { DEFAULT: '#18181b', foreground: '#fafafa' },
+            muted: { DEFAULT: '#27272a', foreground: '#a1a1aa' },
+            accent: { DEFAULT: '#27272a', foreground: '#fafafa' }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { height: 100%; }
+    body { background-color: #09090b; color: #fafafa; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 9999px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .animate-spin { animation: spin 0.8s linear infinite; }
+    @keyframes fadeSlideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeSlideUp 0.25s ease-out; }
+    textarea { field-sizing: content; }
+  </style>
+</head>
+<body class="dark">
+  <div id="root"></div>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel" data-presets="react">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    const runScript = (fnName, ...args) =>
+      new Promise((resolve, reject) => {
+        if (typeof google === 'undefined') return reject(new Error('No GAS context'));
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fnName](...args);
+      });
+
+    const SpinnerIcon = ({ size = 16 }) => (
+      <svg className="animate-spin" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+      </svg>
+    );
+
+    function RecipeCard({ recipe }) {
+      const [exporting, setExporting] = useState(false);
+      const [exported, setExported] = useState(null);
+      return (
+        <div className="fade-in rounded-xl border border-zinc-700/50 bg-zinc-900 w-full max-w-lg overflow-hidden">
+          <div className="bg-emerald-900 px-5 py-4">
+            <h3 className="text-lg font-bold text-white">{recipe.title}</h3>
+          </div>
+          <div className="p-5 space-y-4">
+            <button
+              onClick={async () => {
+                setExporting(true);
+                const res = await runScript('createRecipeDoc', recipe);
+                setExported(JSON.parse(res));
+                setExporting(false);
+              }}
+              disabled={exporting || exported}
+              className="w-full px-4 py-2 bg-emerald-600 rounded-lg text-sm text-white disabled:bg-zinc-700"
+            >
+              {exporting ? 'Exporting...' : exported ? '✓ Exported' : 'Export to Doc'}
+            </button>
+            {exported && <a href={exported.url} target="_blank" className="text-xs text-emerald-400">Open Document →</a>}
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      const [messages, setMessages] = useState([]);
+      const [inputValue, setInputValue] = useState('');
+      const [loading, setLoading] = useState(false);
+
+      const addMessage = useCallback(msg => {
+        setMessages(p => [...p, { id: Date.now(), ...msg }]);
+      }, []);
+
+      const sendMessage = async () => {
+        if (!inputValue.trim() || loading) return;
+        const text = inputValue.trim();
+        setInputValue('');
+        addMessage({ role: 'user', content: text });
+        setLoading(true);
+
+        try {
+          let aiMessages = messages.map(m => ({ role: m.role, content: m.content || "" }));
+          aiMessages.push({ role: 'user', content: text });
+
+          let isFinal = false;
+          let isFallback = false;
+
+          while (!isFinal) {
+            const resStr = await runScript('chatWithAI_step', aiMessages, isFallback);
+            const response = JSON.parse(resStr);
+
+            if (response.type === 'fallback') {
+              isFallback = true;
+              continue;
+            }
+
+            if (response.type === 'tool_calls') {
+              aiMessages.push(response.message);
+              for (let tool of response.tools) {
+                const toolRes = await runScript('executeTool', tool.function.name, tool.function.arguments);
+                aiMessages.push({ role: 'tool', tool_call_id: tool.id, name: tool.function.name, content: toolRes });
+              }
+            } else {
+              isFinal = true;
+              const data = response.response;
+              // Defensive check: handle cases where reasoning models return internal metadata or null.
+              if (data && data.proposals && data.proposals.length > 0) {
+                addMessage({ role: 'assistant', type: 'recipes', content: data.message, recipes: data.proposals });
+              } else {
+                addMessage({ role: 'assistant', content: (data && data.message) || "Done." });
+              }
+            }
+          }
+        } catch (e) {
+          addMessage({ role: 'assistant', content: "Error: " + e.message });
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      return (
+        <div className="flex flex-col h-full bg-zinc-950 p-4">
+          <div className="flex-1 overflow-y-auto space-y-4">
+            {messages.map(m => (
+              <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                {m.type === 'recipes' ? (
+                  <div className="space-y-4">{m.recipes.map((r, i) => <RecipeCard key={i} recipe={r} />)}</div>
+                ) : (
+                  <div className="max-w-[80%] p-3 rounded-xl bg-zinc-800 text-sm">{m.content}</div>
+                )}
+              </div>
+            ))}
+            {loading && <div className="text-zinc-500 text-xs animate-pulse">Thinking...</div>}
+          </div>
+          <div className="pt-4 flex gap-2">
+            <input 
+              value={inputValue} 
+              onChange={e => setInputValue(e.target.value)} 
+              onKeyDown={e => e.key === 'Enter' && sendMessage()}
+              className="flex-1 bg-zinc-800 border-none rounded-lg p-2 text-sm outline-none ring-1 ring-zinc-700" 
+            />
+            <button onClick={sendMessage} className="bg-emerald-600 px-4 rounded-lg text-white font-bold">Send</button>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
