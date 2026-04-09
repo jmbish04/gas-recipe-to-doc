@@ -144,6 +144,7 @@
           <div className="w-full h-48 bg-zinc-800 border-b border-zinc-700/50 relative">
             <img 
               src={recipe.imageUrl} 
+              alt={recipe.title}
               className="w-full h-full object-cover opacity-90"
               onError={(e) => e.target.style.display = 'none'}
             />
@@ -156,12 +157,27 @@
           <p className="text-xs text-emerald-200/70 mt-1 line-clamp-2">{recipe.description}</p>
         </div>
 
+        {/* Stats Grid */}
+        <div className="grid grid-cols-3 divide-x divide-zinc-700/50 border-b border-zinc-700/50 bg-zinc-900/50">
+          {[
+            { label: 'Prep', value: recipe.prepTime },
+            { label: 'Cook', value: recipe.cookTime },
+            { label: 'Serves', value: recipe.servings }
+          ].map(({ label, value }) => (
+            <div key={label} className="py-3 text-center">
+              <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">{label}</p>
+              <p className="text-sm font-semibold text-zinc-200 mt-0.5">{value || 'N/A'}</p>
+            </div>
+          ))}
+        </div>
+
         <div className="p-5 space-y-6">
           {/* Ingredients */}
+          {recipe.ingredients?.length > 0 && (
           <div>
             <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2.5">Ingredients</h4>
             <ul className="text-sm text-zinc-300 space-y-1.5">
-              {recipe.ingredients?.map((ing, i) => (
+              {recipe.ingredients.map((ing, i) => (
                 <li key={i} className="flex gap-2">
                   <span className="text-emerald-500/50">•</span>
                   <span>{ing}</span>
@@ -169,12 +185,14 @@
               ))}
             </ul>
           </div>
+          )}
 
           {/* Instructions */}
+          {recipe.instructions?.length > 0 && (
           <div>
             <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2.5">Instructions</h4>
             <ol className="text-sm text-zinc-300 space-y-3">
-              {recipe.instructions?.map((step, i) => (
+              {recipe.instructions.map((step, i) => (
                 <li key={i} className="flex gap-3">
                   <span className="shrink-0 w-5 h-5 rounded bg-zinc-800 text-[10px] font-bold text-emerald-400 flex items-center justify-center border border-zinc-700">{i+1}</span>
                   <span className="leading-relaxed">{step.replace(/^(Step\s*\d+[:.]\s*|\d+[:.]\s*)/i, '')}</span>
@@ -182,6 +200,7 @@
               ))}
             </ol>
           </div>
+          )}
 
           <div className="pt-4 border-t border-zinc-800/50">
             {exported ? (

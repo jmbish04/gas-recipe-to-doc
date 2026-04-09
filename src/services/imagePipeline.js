@@ -270,60 +270,6 @@ function processAndInjectRecipeImage(cloudflareImageUrl, docId) {
   if (!cloudflareImageUrl) throw new Error(`[processAndInjectRecipeImage] Missing required parameter: 'cloudflareImageUrl'; Here's what we received ${cloudflareImageUrl}`);
   if (!docId) throw new Error(`[processAndInjectRecipeImage] Missing required parameter: 'docId'; Here's what we received ${docId}`);
 
-  try {
-    const optimizedResponse = UrlFetchApp.fetch(cloudflareImageUrl, { muteHttpExceptions: true });
-    if (optimizedResponse.getResponseCode() >= 400) {
-      throw new Error(`[processAndInjectRecipeImage] Failed to fetch optimized image from Cloudflare: ${optimizedResponse.getResponseCode()}`);
-    }
-    const optimizedBlob = optimizedResponse.getBlob();
-
-    const doc = DocumentApp.openById(docId);
-    const body = doc.getBody();
-
-    const placeholder = body.findText('{{IMAGE}}');
-    if (placeholder) {
-      const element = placeholder.getElement();
-      const parent = element.getParent();
-      const img = parent.asParagraph().insertInlineImage(0, optimizedBlob);
-
-      const width = 500;
-      const originalWidth = img.getWidth() || 1;
-      const height = Math.round((img.getHeight() / originalWidth) * width);
-
-      img.setWidth(width).setHeight(Math.max(height, 1));
-      element.asText().setText('');
-    } else {
-        const injectedImage = body.appendImage(optimizedBlob);
-        const originalWidth = injectedImage.getWidth() || 1;
-        const originalHeight = injectedImage.getHeight() || 1;
-        const targetWidth = 500;
-        const ratio = targetWidth / originalWidth;
-        injectedImage.setWidth(targetWidth);
-        injectedImage.setHeight(Math.max(Math.round(originalHeight * ratio), 1));
-    }
-
-    doc.saveAndClose();
-
-    return cloudflareImageUrl;
-
-  } catch (error) {
-    console.error("Image injection pipeline failed:", error);
-    throw error;
-  }
-}
-
-
-
-/**
- * Orchestrates fetching from Cloudflare and precise injection into a Doc.
- * @param {string} cloudflareImageUrl - The delivery URL (e.g., https://imagedelivery.net/<ID>/<VARIANT>).
- * @param {string} docId - Target Google Document ID.
- * @returns {string} The processed URL for logging.
- */
-function processAndInjectRecipeImage(cloudflareImageUrl, docId) {
-  if (!cloudflareImageUrl) throw new Error(`[processAndInjectRecipeImage] Missing required parameter: 'cloudflareImageUrl'; Here's what we received ${cloudflareImageUrl}`);
-  if (!docId) throw new Error(`[processAndInjectRecipeImage] Missing required parameter: 'docId'; Here's what we received ${docId}`);
-
   const TARGET_WIDTH = 500;
   
   try {

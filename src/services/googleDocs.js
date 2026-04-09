@@ -23,7 +23,9 @@ function createRecipeDoc(recipe) {
   replacePlaceholderWithList(body, '{{INGREDIENTS}}', recipe.ingredients || [], DocumentApp.GlyphType.BULLET);
   replacePlaceholderWithList(body, '{{INSTRUCTIONS}}', recipe.instructions || [], DocumentApp.GlyphType.NUMBER, true);
   replacePlaceholderWithList(body, '{{CULINARY_SCIENCE}}', recipe.culinaryScience || [], DocumentApp.GlyphType.BULLET);
+  replacePlaceholderWithList(body, '{{RESTAURANT_TECHNIQUES}}', recipe.restaurantTechniques || [], DocumentApp.GlyphType.BULLET);
   replacePlaceholderWithList(body, '{{CHEF_INSIGHTS}}', recipe.chefInsights || [], DocumentApp.GlyphType.BULLET);
+  replacePlaceholderWithList(body, '{{TROUBLESHOOTING}}', recipe.troubleshooting || [], DocumentApp.GlyphType.BULLET);
 
   // HERO IMAGE ACTIVATION
   if (recipe.imageUrl) {
@@ -56,6 +58,7 @@ function replacePlaceholderWithList(body, placeholder, items, glyphType, parseBo
     items.forEach((item, i) => {
       const listItem = parent.insertListItem(index + i, item);
       listItem.setGlyphType(glyphType);
+      if (parseBold) processMarkdownBold(listItem.editAsText(), item);
     });
     try {
       container.removeFromParent();
@@ -66,4 +69,26 @@ function replacePlaceholderWithList(body, placeholder, items, glyphType, parseBo
   } else {
     element.asText().setText("");
   }
+}
+
+/**
+ * Parses markdown-style **bold** and applies native Google Docs formatting.
+ */
+function processMarkdownBold(textElement, rawText) {
+  const parts = rawText.split(/(\*\*.*?\*\*)/g);
+  let cleanText = "";
+  const boldRanges = [];
+
+  parts.forEach(part => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      const content = part.substring(2, part.length - 2);
+      boldRanges.push({ start: cleanText.length, end: cleanText.length + content.length - 1 });
+      cleanText += content;
+    } else {
+      cleanText += part;
+    }
+  });
+
+  textElement.setText(cleanText);
+  boldRanges.forEach(range => textElement.setBold(range.start, range.end, true));
 }
