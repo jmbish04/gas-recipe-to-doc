@@ -13,9 +13,8 @@
  */
 function captureRecipeData(targetUrl) {
   // --- CONFIGURATION ---
-  const props = PropertiesService.getScriptProperties();
-  const CLOUDFLARE_ACCOUNT_ID = props.getProperty('CLOUDFLARE_ACCOUNT_ID');
-  const CLOUDFLARE_API_TOKEN = props.getProperty('CLOUDFLARE_BROWSER_RENDER_TOKEN');
+  const CLOUDFLARE_ACCOUNT_ID = CONFIG.CLOUDFLARE_ACCOUNT_ID;
+  const CLOUDFLARE_API_TOKEN = CONFIG.CLOUDFLARE_BROWSER_RENDER_TOKEN;
 
   if (!targetUrl) {
     return "Error: No URL provided for capturing recipe data.";
@@ -24,26 +23,45 @@ function captureRecipeData(targetUrl) {
   // --- EXECUTION ---
   try {
     // 1. Extract Markdown (Text & Structure)
-    const markdownContent = fetchCloudflareMarkdown(targetUrl, CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN);
+    const markdownContent = fetchCloudflareMarkdown(
+      targetUrl, 
+      CLOUDFLARE_ACCOUNT_ID, 
+      CLOUDFLARE_API_TOKEN
+    );
 
     // 2. Capture Screenshot (Visual of the finished food)
     // We use a mobile-like viewport to focus on the "Hero" image usually at the top
-    const imageBlob = fetchCloudflareScreenshot(targetUrl, CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN);
+    const imageBlob = fetchCloudflareScreenshot(
+      targetUrl, 
+      CLOUDFLARE_ACCOUNT_ID, 
+      CLOUDFLARE_API_TOKEN
+    );
 
     // 3. Save to Google Drive (Example Output)
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const folder = DriveApp.createFolder(`Recipe_Capture_${timestamp}`);
 
-    folder.createFile('recipe.md', markdownContent);
+    let exportFolder;
+
+    /* Try to get create a new folder under the main export folder */
+    try{
+      exportFolder = DriveApp.getFolderById(CONFIG.FOLDER_ID);
+    }
+    catch(error){
+      console.log(`[captureRecipeData] Unable to access the Export Drive Folder. ID provided was ${CONFIG.FOLDER_ID}; Error: ${JSON.stringify(error)}`);
+    }  
+    
+    const folder = exportFolder.createFolder(`Recipe_Capture_${timestamp}`);
+
+    folder.createFile('recipe.md', markdownContent, 'text/markdown');
     folder.createFile(imageBlob).setName('finished_dish.png');
 
-    const message = 'Success! Files saved to Drive folder: ' + folder.getName() + ' with ID: ' + folder.getId();
-    Logger.log(message);
+    const message = `Success! Files saved to Drive folder: "${folder.getName()}"; Folder Url: ${folder.getUrl()}`;
+    console.log(`[captureRecipeData] ${message}`);
     return message;
 
-  } catch (e) {
-    const errorMsg = 'Error capturing recipe data: ' + e.toString();
-    Logger.log(errorMsg);
+  } catch (error) {
+    const errorMsg = `Error capturing recipe data: ${JSON.stringify(error)}`;
+    console.log(`[captureRecipeData]  ${errorMsg}`);
     return errorMsg;
   }
 }

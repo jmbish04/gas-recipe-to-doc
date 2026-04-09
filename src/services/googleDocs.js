@@ -31,7 +31,7 @@ function createRecipeDoc(recipe) {
   }
   catch(error){
     console.log(`[createRecipeDoc] Unable to access the Export Drive Folder. ID provided was ${CONFIG.FOLDER_ID}; Error: ${JSON.stringify(error)}`);
-  }
+  }  
 
   const newFile = templateFile.makeCopy('Recipe: ' + recipe.title, folder);
   const doc = DocumentApp.openById(newFile.getId());
@@ -57,12 +57,16 @@ function createRecipeDoc(recipe) {
   // 3. Dynamic List Handling (Ingredients & Instructions)
   replacePlaceholderWithList(body, '{{INGREDIENTS}}', recipe.ingredients || [], DocumentApp.GlyphType.BULLET);
   replacePlaceholderWithList(body, '{{INSTRUCTIONS}}', recipe.instructions || recipe.preparation || [], DocumentApp.GlyphType.NUMBER, true);
+  replacePlaceholderWithList(body, '{{CULINARY_SCIENCE}}', recipe.culinaryScience || [], DocumentApp.GlyphType.BULLET);
+  replacePlaceholderWithList(body, '{{RESTAURANT_TECHNIQUES}}', recipe.restaurantTechniques || [], DocumentApp.GlyphType.BULLET);
+  replacePlaceholderWithList(body, '{{CHEF_INSIGHTS}}', recipe.chefInsights || [], DocumentApp.GlyphType.BULLET);
+  replacePlaceholderWithList(body, '{{TROUBLESHOOTING}}', recipe.troubleshooting || [], DocumentApp.GlyphType.BULLET);
 
   // 4. Persistent Image Actuation
   processCloudflareImage(body, recipe, CF_ACCOUNT_ID, CF_TOKEN);
 
   doc.saveAndClose();
-  const docUrl = 'https://docs.google.com/document/d/' + newFile.getId() + '/edit';
+  const docUrl = newFile.getUrl();
 
   if (typeof logExport === 'function') logExport(recipe, docUrl);
   return JSON.stringify({ docId: newFile.getId(), url: docUrl });
@@ -83,7 +87,7 @@ function applyShrinkToFit(doc, textElement, text) {
   const longestWord = words.reduce((a, b) => a.length > b.length ? a : b, "");
 
   let currentSize = MAX_TITLE_FONT_SIZE;
-
+  
   /**
    * Estimation Formula:
    * Width ≈ (Character Count) * (Font Size) * (Average Width Factor)
@@ -154,12 +158,23 @@ function processCloudflareImage(body, recipe, accountId, token) {
   }
 
   try {
-    const docId = body.getParent().getId();
-    processAndInjectRecipeImage(finalImageUrl, docId);
+    const cfApiUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/images/v1`;
+    const uploadResponse = UrlFetchApp.fetch(cfApiUrl, {
+      method: 'post',
+      headers: { 'Authorization': 'Bearer ' + token },
+      payload: { url: finalImageUrl, metadata: JSON.stringify({ title: recipe.title }) }
+    });
 
-    // Clean up the placeholder if it still exists
+    const result = JSON.parse(uploadResponse.getContentText());
+    if (result.success) finalImageUrl = result.result.variants[0];
+
+    const resp = UrlFetchApp.fetch(finalImageUrl);
     const placeholder = body.findText('{{IMAGE}}');
     if (placeholder) {
+      const img = placeholder.getElement().getParent().asParagraph().insertInlineImage(0, resp.getBlob());
+      const width = 450;
+      const height = Math.round((img.getHeight() / (img.getWidth() || 1)) * width);
+      img.setWidth(width).setHeight(height);
       placeholder.getElement().asText().setText('');
     }
   } catch (e) {
