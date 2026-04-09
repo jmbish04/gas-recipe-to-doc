@@ -507,15 +507,22 @@
 
           let isFinal = false;
           let breaker = 0; // prevent infinite loops
+          let isFallback = false;
 
           while (!isFinal && breaker < 10) {
               breaker++;
-              const responseStr = await runScript('chatWithAI_step', aiMessages);
+              const responseStr = await runScript('chatWithAI_step', aiMessages, isFallback);
               let response;
               try {
                   response = JSON.parse(responseStr);
               } catch (e) {
                  throw new Error("Failed to parse response: " + responseStr);
+              }
+
+              if (response.type === 'fallback') {
+                  addMessage({ role: 'assistant', type: 'error', content: `Primary AI model failed (${response.error}). Falling back to ${response.fallbackModel}...` });
+                  isFallback = true;
+                  continue;
               }
 
               if (response.type === 'tool_calls') {

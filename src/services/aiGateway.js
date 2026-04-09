@@ -10,7 +10,7 @@
  * @param {Array} messages - Array of prior {role, content} conversation objects.
  * @returns {string} The serialized JSON response matching the strict RESPONSE_FORMAT schema.
  */
-function chatWithAI_step(messages) {
+function chatWithAI_step(messages, isFallback = false) {
   // If this is the first message in the flow, prepend the static system prompt.
   let fullMessages = messages;
   if (!messages || messages.length === 0 || messages[0].role !== 'system') {
@@ -31,7 +31,7 @@ function chatWithAI_step(messages) {
   }
 
   // Pass the enriched message array into the step execution engine.
-  return executeAgentStep(fullMessages);
+  return executeAgentStep(fullMessages, isFallback);
 }
 
 // Tool Dispatch Map definition for better code maintainability
@@ -57,10 +57,10 @@ const TOOL_DISPATCHER = {
  * @param {number} depth - The current recursion depth to prevent infinite loops (Circuit Breaker).
  * @returns {string} The final JSON string payload.
  */
-function executeAgentStep(messages) {
+function executeAgentStep(messages, isFallback = false) {
   // Construct the payload utilizing OpenAI standard parameters compatible with CF AI Gateway.
   const payload = {
-    model: CONFIG.AI_MODEL,
+    model: isFallback ? CONFIG.AI_MODEL_FALLBACK_NAME : CONFIG.AI_MODEL,
     messages: messages,
     tools: TOOLS,
     // Allow the model to autonomously decide whether to call a tool or finalize the response.
@@ -91,8 +91,11 @@ function executeAgentStep(messages) {
   const responseCode = response.getResponseCode();
   const responseText = response.getContentText();
 
-  // Validate the network response; throw explicit errors for gateway failures to trigger upstream catching.
+  // Validate the network response; handle gateway failures.
   if (responseCode !== 200) {
+    if (!isFallback) {
+      return JSON.stringify({ type: 'fallback', error: 'AI Gateway error (' + responseCode + '): ' + responseText, fallbackModel: CONFIG.AI_MODEL_FALLBACK_NAME });
+    }
     throw new Error('AI Gateway error (' + responseCode + '): ' + responseText);
   }
 
@@ -101,6 +104,9 @@ function executeAgentStep(messages) {
 
   // Check for logical API errors returned within a 200 OK wrapper.
   if (parsed.error) {
+    if (!isFallback) {
+        return JSON.stringify({ type: 'fallback', error: parsed.error.message || 'Unknown AI error', fallbackModel: CONFIG.AI_MODEL_FALLBACK_NAME });
+    }
     throw new Error(parsed.error.message || 'Unknown AI error');
   }
 

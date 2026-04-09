@@ -56,6 +56,7 @@ const CONFIG = {
 
   // Define the designated Agent LLM. Using the OpenAI interface structure for guaranteed tool calling compliance.
   AI_MODEL: scriptProps.getProperty('AI_MODEL_NAME') || 'google-ai-studio/gemini-2.5-pro',
+  AI_MODEL_FALLBACK_NAME: scriptProps.getProperty('AI_MODEL_FALLBACK_NAME') || 'workers-ai/@cf/openai/gpt-oss-120b',
 
   // Define the target worksheet name within the logging spreadsheet.
   HISTORY_SHEET_NAME: 'History'
