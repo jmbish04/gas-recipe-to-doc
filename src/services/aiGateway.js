@@ -58,6 +58,66 @@ const TOOL_DISPATCHER = {
  * @returns {string} The final JSON string payload.
  */
 function executeAgentStep(messages, isFallback = false) {
+
+  if (isFallback) {
+    // Sanitize messages for Workers AI: remove tool_calls, map tool roles to user
+    const sanitizedMessages = messages.map(m => {
+      let role = m.role;
+      if (role === 'tool') role = 'user';
+      let content = m.content;
+      if (typeof content !== 'string') {
+          if (Array.isArray(content)) {
+              content = content.map(c => c.text || '').join('');
+          } else if (content) {
+              content = JSON.stringify(content);
+          } else {
+              content = '';
+          }
+      }
+      return { role, content };
+    });
+
+    const modelName = CONFIG.AI_MODEL_FALLBACK_NAME.replace(/^workers-ai\//, '');
+    const fallbackUrl = `https://api.cloudflare.com/client/v4/accounts/${CONFIG.CLOUDFLARE_ACCOUNT_ID}/ai/run/${modelName}`;
+
+    const fallbackPayload = {
+      messages: sanitizedMessages
+    };
+
+    const fallbackOptions = {
+      method: 'post',
+      contentType: 'application/json',
+      headers: {
+        'Authorization': 'Bearer ' + CONFIG.CLOUDFLARE_AUTH_TOKEN
+      },
+      payload: JSON.stringify(fallbackPayload),
+      muteHttpExceptions: true
+    };
+
+    const fallbackResponse = UrlFetchApp.fetch(fallbackUrl, fallbackOptions);
+    const fallbackResponseCode = fallbackResponse.getResponseCode();
+    const fallbackResponseText = fallbackResponse.getContentText();
+
+    if (fallbackResponseCode !== 200) {
+      throw new Error('Workers AI fallback error (' + fallbackResponseCode + '): ' + fallbackResponseText);
+    }
+
+    const fallbackParsed = JSON.parse(fallbackResponseText);
+    if (!fallbackParsed.success) {
+      throw new Error('Workers AI fallback failed: ' + JSON.stringify(fallbackParsed.errors));
+    }
+
+    const generatedText = fallbackParsed.result.response;
+    try {
+      // Try to parse if it returned JSON
+      const finalData = JSON.parse(generatedText);
+      return JSON.stringify({ type: "final", response: finalData });
+    } catch (_) {
+      // Fallback to unstructured
+      return JSON.stringify({ type: "final", response: { message: generatedText, proposals: [], doc_url: "" } });
+    }
+  }
+
   // Construct the payload utilizing OpenAI standard parameters compatible with CF AI Gateway.
   const payload = {
     model: isFallback ? CONFIG.AI_MODEL_FALLBACK_NAME : CONFIG.AI_MODEL,
