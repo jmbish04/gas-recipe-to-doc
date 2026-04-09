@@ -29,6 +29,9 @@ const SEARCH_API_KEY = scriptProps.getProperty('SEARCH_API_KEY');
 // Retrieve the Custom Search Engine ID (CX) required for Google Search targeting.
 const SEARCH_CX = scriptProps.getProperty('SEARCH_CX');
 
+// Extract the Cloudflare Auth Token for direct API calls.
+const CF_AUTH_TOKEN = scriptProps.getProperty('CLOUDFLARE_AUTH_TOKEN');
+
 // Define the core application configuration, locking down structural IDs and API endpoints.
 const CONFIG = {
   // Google Drive template ID for the recipe document.
@@ -42,6 +45,9 @@ const CONFIG = {
   SEARCH_API_KEY: SEARCH_API_KEY,
   // Inject the retrieved Search CX into the active configuration.
   SEARCH_CX: SEARCH_CX,
+
+  // Map the Auth Token to the internal key representation.
+  CLOUDFLARE_AUTH_TOKEN: CF_AUTH_TOKEN,
 
   // Map the Account ID to the internal key representation.
   CLOUDFLARE_ACCOUNT_ID: CF_ACCOUNT_ID,
