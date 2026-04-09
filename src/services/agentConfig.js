@@ -107,7 +107,6 @@ const TOOLS = [
     }
   },
   {
-{
     type: "function",
     function: {
       name: "propose_recipes",
