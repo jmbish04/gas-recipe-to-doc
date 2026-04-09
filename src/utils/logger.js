@@ -32,7 +32,6 @@ function logExport(recipeData, docUrl) {
  * @param {object} errorObject - The error object caught in the handler.
  */
 function logTelemetry(functionName, errorMessage, errorObject) {
-  const timestamp = Utilities.
   // Serialize specific metadata fields to prevent sheet cell bloat while retaining analytics value.
   const details = JSON.stringify({
     functionName,
