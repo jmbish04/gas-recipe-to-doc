@@ -13,7 +13,7 @@ const MIN_TITLE_FONT_SIZE = 12;  // Minimum allowed font size before stopping
  * @returns {string} JSON stringified object containing {docId, url}.
  */
 function createRecipeDoc(recipe) {
-  const CF_TOKEN = CONFIG.CF_IMAGES_API_TOKEN;
+  const CF_TOKEN = CONFIG.CLOUDFLARE_IMAGES_STREAM_TOKEN;
   const CF_ACCOUNT_ID = CONFIG.CLOUDFLARE_ACCOUNT_ID;
 
   let templateFile, folder;
