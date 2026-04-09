@@ -87,10 +87,10 @@ function executeAgentStep(messages, isFallback = false) {
   };
 
   if (isFallback) {
-      actualModel = `workers-ai/${actualModel.replace('workers-ai/', '')}`;
-      endpointUrl = `https://api.cloudflare.com/client/v4/accounts/${CONFIG.CLOUDFLARE_ACCOUNT_ID}/ai/run/${actualModel}`;
+      actualModel = `${actualModel.replace('workers-ai/', '')}`; // Cloudflare API (ai/run) does not prepend models with `workers-ai`.
+      endpointUrl = `${CLOUDFLARE_WORKERS_AI_URL}/${actualModel}`;
       headers = {
-          'Authorization': `Bearer ${CONFIG.CONFI.CLOUDFLARE_AI_GATEWAY_TOKEN}`
+          'Authorization': `Bearer ${CONFIG.CLOUDFLARE_AI_GATEWAY_TOKEN}`
       };
     
       console.log(`[executeAgentStep] workers-ai fallback model: "${CONFIG.AI_MODEL_FALLBACK_NAME}"; Running as ${endpointUrl}`);    
@@ -113,25 +113,36 @@ function executeAgentStep(messages, isFallback = false) {
 
   if (responseCode !== 200) {
     if (!isFallback) {
-      return JSON.stringify({ type: 'fallback', error: 'AI Gateway error (' + responseCode + '): ' + responseText, fallbackModel: CONFIG.AI_MODEL_FALLBACK_NAME });
-    }
-    throw new Error('AI Gateway error (' + responseCode + '): ' + responseText);
+      return JSON.stringify(
+        { 
+          type: 'fallback', 
+          error: `[executeAgentStep] workers-ai ai/run api error (${responseCode}): ${responseText}`, 
+          fallbackModel: CONFIG.AI_MODEL_FALLBACK_NAME
+        }
+      );
+    throw new Error(`[executeAgentStep] AI Gateway error (${responseCode}): ${responseText}`);
   }
 
   const parsed = JSON.parse(responseText);
 
   if (parsed.error) {
     if (!isFallback) {
-        return JSON.stringify({ type: 'fallback', error: JSON.stringify(parsed) || 'Unknown AI error', fallbackModel: CONFIG.AI_MODEL_FALLBACK_NAME });
+        return JSON.stringify(
+          { 
+            type: 'fallback', 
+            error: JSON.stringify(parsed) || 'Unknown AI error', 
+            fallbackModel: CONFIG.AI_MODEL_FALLBACK_NAME 
+          }
+        );
     }
-    throw new Error(JSON.stringify(parsed) || 'Unknown AI error');
+    throw new Error(`[executeAgentStep] ${JSON.stringify(parsed) || 'Unknown AI error'}`);
   }
 
   let message;
 
   if (isFallback) {
       if (!parsed.success && parsed.errors && parsed.errors.length > 0) {
-          throw new Error(parsed.errors[0].message || 'Unknown Workers AI error');
+          throw new Error(`[executeAgentStep] ${parsed.errors[0].message || 'Unknown Workers AI error'}`);
       }
       let resultObj = parsed.result || parsed;
       message = {
@@ -191,9 +202,23 @@ function executeAgentStep(messages, isFallback = false) {
 
   try {
     const finalData = JSON.parse(message.content);
-    return JSON.stringify({ type: "final", response: finalData });
+    return JSON.stringify(
+      { 
+        type: "final", 
+        response: finalData 
+      }
+    );
   } catch (error) {
     console.log(`[executeAgentStep] ${JSON.stringify(error)}`);
-    return JSON.stringify({ type: "final", response: { message: message.content || "", proposals: [], doc_url: "" } });
+    return JSON.stringify(
+      { 
+        type: "final", 
+        response: { 
+          message: message.content || "", 
+          proposals: [], 
+          doc_url: "" 
+        } 
+      }
+    );
   }
 }
