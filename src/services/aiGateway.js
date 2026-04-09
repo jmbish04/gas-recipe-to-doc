@@ -1,28 +1,49 @@
 /**
- * @fileoverview Refactored Cloudflare AI Gateway & Agent Execution Loop
- * Targets: Google Apps Script (V8)
- * Stack: Hono (Routing Pattern), Cloudflare Workers AI
+ * @fileoverview Cloudflare AI Gateway & Agent Execution Loop
+ * @module services/aiGateway
+ * @description Orchestrates AI calls through AI Gateway compatibility mode for primary and fallback attempts.
  */
 
 /**
- * Orchestrates the conversation and manages the failover state.
+ * Tool Dispatch Map for Agentic Workflow
+ */
+const TOOL_DISPATCHER = {
+  'search_web': function(args) {
+    return searchGoogleCustom(args.query);
+  },
+  'search_image': function(args) {
+    return findRecipeImage(args.title) || "No image found.";
+  },
+  'create_recipe_doc': function(args) {
+    const docRes = JSON.parse(createRecipeDoc(args));
+    return "Document created successfully: " + docRes.url;
+  },
+  'capture_recipe_data': function(args) {
+    return captureRecipeData(args.url);
+  }
+};
+
+/**
+ * Entry point for AI conversation steps with automated recovery.
+ * @param {Array} messages - Prior conversation context.
+ * @returns {string} Serialized JSON response.
  */
 function chatWithAI_step(messages) {
   let fullMessages = messages || [];
   
-  // Ensure System Prompt is present
+  // Ensure System Prompt is initialized
   if (fullMessages.length === 0 || fullMessages[0].role !== 'system') {
     fullMessages.unshift({ role: 'system', content: SYSTEM_PROMPT });
   }
 
   try {
-    // Primary Attempt: AI Gateway (OpenAI Compatible)
+    // Primary Attempt via AI Gateway
     return executeAgentStep(fullMessages, false);
   } catch (error) {
-    console.warn(`[RECOVERY] Primary AI failed: ${error.message}. Initiating Fallback...`);
+    console.warn(`[RECOVERY] Primary AI failed: ${error.message}. Initiating AI Gateway fallback...`);
     
-    // Self-Healing: Internal Retry with Fallback Model
     try {
+      // Fallback Attempt via AI Gateway (OpenAI Compat Mode)
       return executeAgentStep(fullMessages, true);
     } catch (fallbackError) {
       console.error(`[CRITICAL] All AI providers exhausted: ${fallbackError.message}`);
@@ -32,13 +53,14 @@ function chatWithAI_step(messages) {
 }
 
 /**
- * Executes a single inference step.
- * Handles structural differences between AI Gateway (OpenAI-style) and Workers AI (Direct REST).
+ * Executes a single inference step using the AI Gateway Compatibility endpoint.
+ * @param {Array} messages - Message history.
+ * @param {boolean} isFallback - Whether to use the fallback model.
  */
 function executeAgentStep(messages, isFallback = false) {
   const model = isFallback ? CONFIG.AI_MODEL_FALLBACK_NAME : CONFIG.AI_MODEL;
   
-  // Sanitize message content for consistency
+  // Sanitize message structure for OpenAI compatibility
   const sanitizedMessages = messages.map(msg => ({
     role: msg.role,
     content: Array.isArray(msg.content) 
@@ -49,38 +71,20 @@ function executeAgentStep(messages, isFallback = false) {
     ...(msg.name ? { name: msg.name } : {})
   }));
 
-  // Construct endpoint and headers
-  let endpointUrl, headers, payload;
+  const endpointUrl = CONFIG.CLOUDFLARE_AI_GATEWAY_URL;
+  const headers = { 
+    "cf-aig-authorization": `Bearer ${CONFIG.CLOUDFLARE_AI_GATEWAY_TOKEN}`,
+    "Content-Type": "application/json"
+  };
 
-  if (isFallback) {
-    // Workers AI Direct REST API Schema
-    const modelId = model.replace('workers-ai/', '');
-    endpointUrl = `${CONFIG.CLOUDFLARE_WORKERS_AI_URL}/${modelId}`;
-    headers = { 
-      "Authorization": `Bearer ${CONFIG.CLOUDFLARE_AI_GATEWAY_TOKEN}`,
-      "Content-Type": "application/json"
-    };
-    payload = {
-      messages: sanitizedMessages,
-      tools: TOOLS,
-      max_tokens: 1024 // Essential for larger models like Llama 3.3
-    };
-  } else {
-    // AI Gateway OpenAI-Compatible Schema
-    endpointUrl = CONFIG.CLOUDFLARE_AI_GATEWAY_URL;
-    headers = { 
-      "cf-aig-authorization": `Bearer ${CONFIG.CLOUDFLARE_AI_GATEWAY_TOKEN}`,
-      "Content-Type": "application/json"
-    };
-    payload = {
-      model: model,
-      messages: sanitizedMessages,
-      tools: TOOLS,
-      tool_choice: "auto",
-      response_format: RESPONSE_FORMAT,
-      temperature: 0.5
-    };
-  }
+  const payload = {
+    model: model,
+    messages: sanitizedMessages,
+    tools: TOOLS,
+    tool_choice: "auto",
+    response_format: RESPONSE_FORMAT,
+    temperature: 0.5
+  };
 
   const response = UrlFetchApp.fetch(endpointUrl, {
     method: 'post',
@@ -93,45 +97,40 @@ function executeAgentStep(messages, isFallback = false) {
   const text = response.getContentText();
   
   if (code !== 200) {
-    throw new Error(`AI_API_ERROR_${code}: ${text}`);
+    throw new Error(`AI_GATEWAY_ERROR_${code}: ${text}`);
   }
 
   const parsed = JSON.parse(text);
-  let aiMessage;
+  const aiMessage = parsed.choices[0].message;
 
-  // Normalize response structure
-  if (isFallback) {
-    if (!parsed.success) throw new Error(`Workers AI Error: ${JSON.stringify(parsed.errors)}`);
-    // Workers AI returns { result: { response, tool_calls } }
-    const result = parsed.result;
-    aiMessage = {
-      role: "assistant",
-      content: result.response || "",
-      tool_calls: (result.tool_calls || []).map(tc => ({
-        id: `call_${Utilities.getUuid().split('-')[0]}`, // Generate ID for local state tracking
-        type: "function",
-        function: {
-          name: tc.name,
-          arguments: typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments)
-        }
-      }))
-    };
-  } else {
-    // OpenAI style: { choices: [{ message }] }
-    aiMessage = parsed.choices[0].message;
-  }
-
-  // Tool Selection Logic
+  // Intercept and hydrate 'propose_recipes' for Generative UI
   if (aiMessage.tool_calls && aiMessage.tool_calls.length > 0) {
+    const proposeCall = aiMessage.tool_calls.find(tc => tc.function.name === 'propose_recipes');
+    
+    if (proposeCall) {
+      const args = JSON.parse(proposeCall.function.arguments);
+      const recipes = enrichRecipesWithImages(args.recipes || []);
+
+      return JSON.stringify({
+        type: "final",
+        response: {
+          message: "I have prepared three specialized recipe options for you.",
+          proposals: recipes,
+          doc_url: ""
+        }
+      });
+    }
+
+    // Recursively handle other tool calls (search_web, etc.)
     return handleToolCalls(aiMessage, sanitizedMessages);
   }
 
-  // Final Serialization
+  // Final structured response serialization
   return finalizeOutput(aiMessage.content);
 }
 
 /**
- * Handles tool call execution and recursion.
+ * Internal utility to process tool outputs and return to the AI loop.
  */
 function handleToolCalls(aiMessage, history) {
   history.push(aiMessage);
@@ -142,11 +141,7 @@ function handleToolCalls(aiMessage, history) {
     let result;
 
     try {
-      if (TOOL_DISPATCHER[toolName]) {
-        result = TOOL_DISPATCHER[toolName](args);
-      } else {
-        result = `Error: Tool ${toolName} not found.`;
-      }
+      result = TOOL_DISPATCHER[toolName] ? TOOL_DISPATCHER[toolName](args) : `Error: Tool ${toolName} not found.`;
     } catch (e) {
       result = `Error executing ${toolName}: ${e.message}`;
     }
@@ -159,12 +154,11 @@ function handleToolCalls(aiMessage, history) {
     });
   });
 
-  // Recursive call to get the next model response after tool results
   return executeAgentStep(history, false); 
 }
 
 /**
- * Ensures output strictly follows the RESPONSE_FORMAT.
+ * Ensures terminal output matches the frontend schema.
  */
 function finalizeOutput(content) {
   try {
