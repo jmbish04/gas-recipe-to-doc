@@ -83,16 +83,14 @@ function executeAgentStep(messages, isFallback = false) {
 
   let endpointUrl = CONFIG.CLOUDFLARE_AI_GATEWAY_URL;
   let headers = {
-    'cf-aig-authorization': 'Bearer ' + CONFIG.CLOUDFLARE_AI_GATEWAY_KEY
+    'cf-aig-authorization': `Bearer ${CONFIG.CLOUDFLARE_AI_GATEWAY_TOKEN}`
   };
 
   if (isFallback) {
-      if (actualModel.indexOf('workers-ai/') === 0) {
-          actualModel = actualModel.substring('workers-ai/'.length);
-      }
-      endpointUrl = 'https://api.cloudflare.com/client/v4/accounts/' + CONFIG.CLOUDFLARE_ACCOUNT_ID + '/ai/run/' + actualModel;
+      actualModel = `workers-ai/${actualModel.replace('workers-ai/', '')}`;
+      endpointUrl = `https://api.cloudflare.com/client/v4/accounts/${CONFIG.CLOUDFLARE_ACCOUNT_ID}/ai/run/${actualModel}`;
       headers = {
-          'Authorization': 'Bearer ' + CONFIG.CLOUDFLARE_AUTH_TOKEN
+          'Authorization': `Bearer ${CONFIG.CLOUDFLARE_AUTH_TOKEN}`
       };
       delete payload.model;
   }
@@ -121,9 +119,9 @@ function executeAgentStep(messages, isFallback = false) {
 
   if (parsed.error) {
     if (!isFallback) {
-        return JSON.stringify({ type: 'fallback', error: parsed.error.message || 'Unknown AI error', fallbackModel: CONFIG.AI_MODEL_FALLBACK_NAME });
+        return JSON.stringify({ type: 'fallback', error: JSON.stringify(parsed) || 'Unknown AI error', fallbackModel: CONFIG.AI_MODEL_FALLBACK_NAME });
     }
-    throw new Error(parsed.error.message || 'Unknown AI error');
+    throw new Error(JSON.stringify(parsed) || 'Unknown AI error');
   }
 
   let message;
@@ -191,7 +189,8 @@ function executeAgentStep(messages, isFallback = false) {
   try {
     const finalData = JSON.parse(message.content);
     return JSON.stringify({ type: "final", response: finalData });
-  } catch (_) {
+  } catch (error) {
+    console.log(`[executeAgentStep] ${JSON.stringify(error)}`);
     return JSON.stringify({ type: "final", response: { message: message.content || "", proposals: [], doc_url: "" } });
   }
 }
