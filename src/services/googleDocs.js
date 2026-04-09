@@ -39,11 +39,14 @@ function createRecipeDoc(recipe) {
       // Calls the global function defined in src/services/imagePipeline.gs
       processAndInjectRecipeImage(recipe.imageUrl, newFile.getId());
     } catch (e) {
-      console.warn("Doc image injection failed: " + e.message);
-      body.replaceText('{{IMAGE}}', '');
+      const errorMessage = `Doc image injection failed: ${JSON.stringify(e)}`;
+        console.error(`[createRecipeDoc] ${errorMessage}`);
+      body.replaceText('{{IMAGE}}', `❌ ${errorMessage}`);
     }
   } else {
-    body.replaceText('{{IMAGE}}', '');
+    const errorMessage = `recipe.imageUrl is NULL: ${recipe.imageUrl}`;
+    console.error(`[createRecipeDoc] ${errorMessage}`);
+    body.replaceText('{{IMAGE}}', `❌ ${errorMessage}`);
   }
 
   doc.saveAndClose();
