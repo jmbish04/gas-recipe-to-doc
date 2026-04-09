@@ -99,15 +99,15 @@ function applyShrinkToFit(doc, textElement, text) {
 
 /**
  * Safely replaces a placeholder with a list.
- * Fixed: Implements "Safe Remove" pattern to prevent "Can't remove last paragraph" exceptions.
+ * Self-Healing: Prevents structural exceptions if placeholder is the terminal paragraph.
  */
 function replacePlaceholderWithList(body, placeholder, items, glyphType, parseBold = false) {
   const rangeElement = body.findText(placeholder);
   if (!rangeElement) return;
 
   const element = rangeElement.getElement();
-  const container = element.getParent(); // Paragraph or ListItem
-  const parent = container.getParent(); // Body or TableCell
+  const container = element.getParent(); 
+  const parent = container.getParent(); 
   const index = parent.getChildIndex(container);
 
   if (items && items.length > 0) {
@@ -117,19 +117,13 @@ function replacePlaceholderWithList(body, placeholder, items, glyphType, parseBo
       if (parseBold) processMarkdownBold(listItem.editAsText(), item);
     });
 
-    /**
-     * SAFE REMOVE PATTERN:
-     * Google Docs requires at least one paragraph-like element per section/cell.
-     * We try to remove the placeholder; if it fails (terminal position), we clear it instead.
-     */
     try {
       container.removeFromParent();
     } catch (e) {
-      // Catching "Can't remove last paragraph" error.
+      // Structure Error Catch: If it's the last element, clear text instead of deleting.
       element.asText().setText(""); 
     }
   } else {
-    // No items? Clear the placeholder.
     element.asText().setText("");
   }
 }
