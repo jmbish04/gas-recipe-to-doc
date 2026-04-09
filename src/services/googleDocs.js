@@ -4,8 +4,8 @@
  * @description Handles the instantiation, templating, and formatting of Google Documents.
  */
 
-const MAX_TITLE_FONT_SIZE: 36, // Starting font size for the title
-const MIN_TITLE_FONT_SIZE: 12;  // Minimum allowed font size before stopping
+const MAX_TITLE_FONT_SIZE = 36; // Starting font size for the title
+const MIN_TITLE_FONT_SIZE = 12;  // Minimum allowed font size before stopping
 
 /**
  * Creates a Google Doc from a recipe using the pre-configured template.
