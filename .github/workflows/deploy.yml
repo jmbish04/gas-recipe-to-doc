@@ -1,0 +1,45 @@
+name: Deploy to Apps Script
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:      
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Clasp
+        run: npm install -g @google/clasp
+
+      - name: Provide Authentication
+        run: echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
+
+      - name: Push and Programmatic Deploy
+        run: |
+          clasp push -f
+          
+          # Search specifically for the deployment describing itself as "PROD_WEB_APP"
+          # Output format is: "- <DEPLOYMENT_ID> @<VERSION> - PROD_WEB_APP"
+          # awk '{print $2}' grabs the ID (the second item in the line)
+          DEPLOY_ID=$(clasp deployments | grep "PROD_WEB_APP" | head -n 1 | awk '{print $2}')
+          
+          if [ -z "$DEPLOY_ID" ]; then
+            echo "Error: No deployment with description 'PROD_WEB_APP' found."
+            echo "Run 'clasp deployments' locally to check your deployment descriptions."
+            exit 1
+          fi
+          
+          echo "Found Production Deployment: $DEPLOY_ID"
+          
+          # Update the deployment, keeping the "PROD_WEB_APP" tag so it works next time too
+          clasp deploy -i "$DEPLOY_ID" -d "PROD_WEB_APP"
