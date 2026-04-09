@@ -70,6 +70,7 @@ const CONFIG = {
   AI_MODEL: scriptProps.getProperty('AI_MODEL_NAME') || 'google-ai-studio/gemini-3-flash-preview',
   AI_MODEL_FALLBACK_NAME: scriptProps.getProperty('AI_MODEL_FALLBACK_NAME') || 'workers-ai/@cf/moonshotai/kimi-k2.5',
 
-  // Define the target worksheet name within the logging spreadsheet.
-  HISTORY_SHEET_NAME: 'History'
+  // Define the target worksheet names within the logging spreadsheet.
+  HISTORY_SHEET_NAME: 'History',
+  TELEMETRY_SHEET_NAME: 'Telemetry'
 };
