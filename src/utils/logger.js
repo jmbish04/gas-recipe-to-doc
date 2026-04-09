@@ -32,16 +32,42 @@ function logExport(recipeData, docUrl) {
  * @param {object} errorObject - The error object caught in the handler.
  */
 function logTelemetry(functionName, errorMessage, errorObject) {
+  // 1. Heuristic logic to determine if this entry represents an error state
+  const isError = (function() {
+    const msg = (errorMessage || "").toLowerCase();
+    
+    // Check for explicit Error instances
+    if (errorObject instanceof Error) return true;
+    
+    // Check for common error keywords in the message
+    const errorKeywords = ['error', 'fail', 'exception', 'invalid', 'rejected', 'unauthorized', 'timeout', 'critical'];
+    if (errorKeywords.some(keyword => msg.includes(keyword))) return true;
+    
+    // Check for API-style error structures (e.g., { error: "...", code: 500 })
+    if (errorObject && typeof errorObject === 'object') {
+      if (errorObject.error || errorObject.errors || errorObject.stack) return true;
+      if (errorObject.status && errorObject.status >= 400) return true;
+      if (errorObject.code && (errorObject.code >= 400 || typeof errorObject.code === 'string')) {
+        if (errorObject.code.toLowerCase().includes('err')) return true;
+      }
+    }
+    
+    return false;
+  })();
+
+
+    
   // Serialize specific metadata fields to prevent sheet cell bloat while retaining analytics value.
   const details = _prettyStringifyJsonObject_({
     timestamp: _getTimestampPstString_(),
-    functionName,
+    functionName: typeof functionName === 'function' ? functionName.name : functionName,
     errorMessage,
-    errorObject
+    errorObject,
+    isError
   });
 
   // Hand off the formatted payload to the internal raw logging function.
-  _logTelemetryToSheet_(functionName, errorMessage, _prettyStringifyJsonObject_(errorObject), details);
+  _logTelemetryToSheet_(functionName, errorMessage, _prettyStringifyJsonObject_(errorObject), details, isError);
 }
 
 /**
@@ -141,8 +167,18 @@ function _logToSheet_(type, name, details, url) {
  * Logs telemetry data to a centralized Google Sheet.
  * Includes session isolation and visual error highlighting.
  */
-function _logTelemetryToSheet_(functionName, errorMessage, errorObject, details, isError = false) {
+function _logTelemetryToSheet_(functionName, errorMessage, errorObject, details, isError) {
   try {
+    // RESOLVE FUNCTION NAME: Extract only the name, avoiding source code bloat.
+    let cleanFunctionName = "anonymous";
+    if (typeof functionName === 'function') {
+      cleanFunctionName = functionName.name || "anonymous";
+    } else if (typeof functionName === 'string') {
+      // If a full function source was passed, extract the name via Regex
+      const nameMatch = functionName.match(/function\s+([a-zA-Z0-9_$]+)/);
+      cleanFunctionName = nameMatch ? nameMatch[1] : functionName;
+    }
+    
     // Open the master logging spreadsheet.
     const ss = SpreadsheetApp.openById(CONFIG.LOG_SHEET_ID);
 
@@ -184,9 +220,10 @@ function _logTelemetryToSheet_(functionName, errorMessage, errorObject, details,
     const lastRow = sheet.getLastRow();
     const rowRange = sheet.getRange(lastRow, 1, 1, headers.length);
 
-    // If an error is detected, highlight the entire row in light red
+    // Apply conditional formatting: Red highlight for errors
     if (isError) {
       rowRange.setBackground("#f4cccc"); // Light Red 3
+      rowRange.setFontColor("#990000"); // Dark Red text
     }
 
     // Apply text wrapping to the complex data fields (Cols 6 & 7: Error Object and Details)
