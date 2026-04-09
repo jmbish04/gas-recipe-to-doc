@@ -483,107 +483,82 @@
         setMessages(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, ...msg }]);
       }, []);
 
-      const sendMessage = useCallback(async () => {
-        const text = inputValue.trim();
-        if (!text || loading) return;
+      /* Updated React sendMessage loop within src/index.html to prevent null access crashes. */
 
-        setInputValue('');
-        addMessage({ role: 'user', type: 'text', content: text });
-        setLoading(true);
+const sendMessage = useCallback(async () => {
+  const text = inputValue.trim();
+  if (!text || loading) return;
 
-        try {
-          // Build clean message history for the AI
-          let aiMessages = [...messages, { role: 'user', content: text }]
-            .filter(m => m.type !== 'error' && m.type !== 'progress')
-            .map(m => {
-                let msg = { role: m.role, content: m.content || "" };
-                if (m.tool_calls) msg.tool_calls = m.tool_calls;
-                if (m.tool_call_id) {
-                    msg.tool_call_id = m.tool_call_id;
-                    msg.name = m.name;
-                }
-                return msg;
-            });
+  setInputValue('');
+  addMessage({ role: 'user', type: 'text', content: text });
+  setLoading(true);
 
-          let isFinal = false;
-          let breaker = 0; // prevent infinite loops
-          let isFallback = false;
-
-          while (!isFinal && breaker < 10) {
-              breaker++;
-              const responseStr = await runScript('chatWithAI_step', aiMessages, isFallback);
-              let response;
-              try {
-                  response = JSON.parse(responseStr);
-              } catch (e) {
-                 throw new Error("Failed to parse response: " + responseStr);
-              }
-
-              if (response.type === 'fallback') {
-                  addMessage({ role: 'assistant', type: 'error', content: `Primary AI model failed (${response.error}). Falling back to ${response.fallbackModel}...` });
-                  isFallback = true;
-                  continue;
-              }
-
-              if (response.type === 'tool_calls') {
-                  // Add the assistant message with tool calls to context
-                  aiMessages.push(response.message);
-
-                  // Process each tool call
-                  for (let tool of response.tools) {
-                      let progressText = `Executing ${tool.function.name}...`;
-                      if (tool.function.name === 'search_web') {
-                          try {
-                             let query = JSON.parse(tool.function.arguments).query;
-                             progressText = `Searching web for "${query}"...`;
-                          } catch(e) {}
-                      } else if (tool.function.name === 'capture_recipe_data') {
-                          progressText = `Extracting recipe details...`;
-                      } else if (tool.function.name === 'propose_recipes') {
-                          progressText = `Preparing recipe options...`;
-                      } else if (tool.function.name === 'search_image') {
-                          progressText = `Searching for images...`;
-                      }
-
-                      // Show progress in UI (use a unique id)
-                      const progressId = Date.now() + Math.random();
-                      setMessages(prev => [...prev, { id: progressId, role: 'assistant', type: 'progress', content: progressText }]);
-
-                      // Execute tool locally by calling backend
-                      const toolResult = await runScript('executeTool', tool.function.name, tool.function.arguments);
-
-                      // Remove progress indicator
-                      setMessages(prev => prev.filter(m => m.id !== progressId));
-
-                      // Append tool result to context
-                      aiMessages.push({
-                          role: "tool",
-                          tool_call_id: tool.id,
-                          name: tool.function.name,
-                          content: toolResult
-                      });
-                  }
-              } else if (response.type === 'final') {
-                  isFinal = true;
-                  const finalRes = response.response;
-                  if (finalRes.proposals && finalRes.proposals.length > 0) {
-                    addMessage({ role: 'assistant', type: 'recipes', content: finalRes.message, recipes: finalRes.proposals });
-                  } else if (finalRes.type === 'recipe' && finalRes.recipe) {
-                    addMessage({ role: 'assistant', type: 'recipe', content: finalRes.message, recipe: finalRes.recipe });
-                  } else {
-                    addMessage({ role: 'assistant', type: 'text', content: finalRes.message || String(finalRes) });
-                  }
-              } else {
-                  isFinal = true;
-                  addMessage({ role: 'assistant', type: 'error', content: 'Unexpected response type.' });
-              }
+  try {
+    let aiMessages = [...messages, { role: 'user', content: text }]
+      .filter(m => m.type !== 'error' && m.type !== 'progress')
+      .map(m => {
+          let msg = { role: m.role, content: m.content || "" };
+          if (m.tool_calls) msg.tool_calls = m.tool_calls;
+          if (m.tool_call_id) {
+              msg.tool_call_id = m.tool_call_id;
+              msg.name = m.name;
           }
-        } catch (err) {
-          addMessage({ role: 'assistant', type: 'error', content: err.message || 'Something went wrong. Please try again.' });
-        } finally {
-          setLoading(false);
+          return msg;
+      });
+
+    let isFinal = false;
+    let breaker = 0;
+    let isFallback = false;
+
+    while (!isFinal && breaker < 10) {
+        breaker++;
+        const responseStr = await runScript('chatWithAI_step', aiMessages, isFallback);
+        let response;
+        try {
+            response = JSON.parse(responseStr);
+        } catch (e) {
+           throw new Error("Failed to parse response: " + responseStr);
         }
-      }, [inputValue, loading, messages, addMessage]);
+
+        if (response.type === 'fallback') {
+            addMessage({ role: 'assistant', type: 'error', content: `Primary AI model failed (${response.error}). Falling back to ${response.fallbackModel}...` });
+            isFallback = true;
+            continue;
+        }
+
+        if (response.type === 'tool_calls') {
+            aiMessages.push(response.message);
+            for (let tool of response.tools) {
+                const progressId = Date.now() + Math.random();
+                setMessages(prev => [...prev, { id: progressId, role: 'assistant', type: 'progress', content: `Executing ${tool.function.name}...` }]);
+                const toolResult = await runScript('executeTool', tool.function.name, tool.function.arguments);
+                setMessages(prev => prev.filter(m => m.id !== progressId));
+                aiMessages.push({ role: "tool", tool_call_id: tool.id, name: tool.function.name, content: toolResult });
+            }
+        } else if (response.type === 'final') {
+            isFinal = true;
+            const finalRes = response.response;
+            
+            // FIX: Defensive check for null response objects.
+            if (finalRes && finalRes.proposals && finalRes.proposals.length > 0) {
+              addMessage({ role: 'assistant', type: 'recipes', content: finalRes.message, recipes: finalRes.proposals });
+            } else if (finalRes && finalRes.type === 'recipe' && finalRes.recipe) {
+              addMessage({ role: 'assistant', type: 'recipe', content: finalRes.message, recipe: finalRes.recipe });
+            } else {
+              addMessage({ role: 'assistant', type: 'text', content: (finalRes && finalRes.message) ? finalRes.message : "I'm sorry, I couldn't process that recipe correctly." });
+            }
+        } else {
+            isFinal = true;
+            addMessage({ role: 'assistant', type: 'error', content: 'Unexpected response type.' });
+        }
+    }
+  } catch (err) {
+    addMessage({ role: 'assistant', type: 'error', content: err.message || 'Something went wrong. Please try again.' });
+  } finally {
+    setLoading(true);
+    setLoading(false);
+  }
+}, [inputValue, loading, messages, addMessage]);
 
       // When user clicks "Repeat search" in history — switch to chat and pre-fill input
       const handleSelectSearch = useCallback(query => {
