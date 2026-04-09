@@ -57,6 +57,10 @@ function createRecipeDoc(recipe) {
   // 3. Dynamic List Handling (Ingredients & Instructions)
   replacePlaceholderWithList(body, '{{INGREDIENTS}}', recipe.ingredients || [], DocumentApp.GlyphType.BULLET);
   replacePlaceholderWithList(body, '{{INSTRUCTIONS}}', recipe.instructions || recipe.preparation || [], DocumentApp.GlyphType.NUMBER, true);
+  replacePlaceholderWithList(body, '{{CULINARY_SCIENCE}}', recipe.culinaryScience || [], DocumentApp.GlyphType.BULLET);
+  replacePlaceholderWithList(body, '{{RESTAURANT_TECHNIQUES}}', recipe.restaurantTechniques || [], DocumentApp.GlyphType.BULLET);
+  replacePlaceholderWithList(body, '{{CHEF_INSIGHTS}}', recipe.chefInsights || [], DocumentApp.GlyphType.BULLET);
+  replacePlaceholderWithList(body, '{{TROUBLESHOOTING}}', recipe.troubleshooting || [], DocumentApp.GlyphType.BULLET);
 
   // 4. Persistent Image Actuation
   processCloudflareImage(body, recipe, CF_ACCOUNT_ID, CF_TOKEN);
