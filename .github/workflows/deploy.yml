@@ -40,7 +40,8 @@ jobs:
           fi
           
           echo "------------------------------------------------------------------------------------------------------------"
-          echo "                                 Found Production Deployment: $DEPLOY_ID"
+          echo "                                 Found Production Deployment:"
+          echo "$DEPLOY_ID"
           echo "https://script.google.com/macros/s/$DEPLOY_ID/exec"
           echo "------------------------------------------------------------------------------------------------------------"
           
