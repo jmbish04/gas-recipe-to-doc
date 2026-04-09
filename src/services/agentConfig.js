@@ -45,11 +45,36 @@ const RESPONSE_FORMAT = {
               prepTime: { type: "string" },
               cookTime: { type: "string" },
               servings: { type: "string" },
+              calories: { type: "string", description: "230 Calories" },
               ingredients: { type: "array", items: { type: "string" } },
               instructions: { type: "array", items: { type: "string" } },
+              "culinaryScience": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "An array of 3-5 expert-level culinary tips explaining the 'why' behind the cooking process. Focus on ingredient science (e.g., starch management, moisture control) and advanced heat techniques (e.g., Maillard reaction, carryover cooking)."
+              },
+              "restaurantTechniques": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Actionable tips to elevate this recipe to restaurant quality. Include advice on creating texture contrasts, achieving perfect plating, selecting optimal ingredient substitutions, and adding professional finishing garnishes."
+              },
+              "troubleshooting": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Crucial tips to prevent common mistakes with this specific dish. Include advice on visual and sensory cues for doneness, temperature management, and how to fix the flavor profile if it becomes unbalanced."
+              },
+              "chefInsights": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Advanced flavor balancing tips (salt, fat, acid, heat) and holistic insights to elevate the dish beyond the basic instructions."
+              },
+              sourceUrl: { type: "string" },
               imageUrl: { type: "string" }
             },
-            required: ["title", "description", "prepTime", "cookTime", "servings", "ingredients", "instructions", "imageUrl"],
+            required: [
+              "title", "description", "prepTime", "cookTime", "servings", "ingredients", "instructions",
+              "culinaryScience", "restaurantTechniques", "troubleshooting", "chefInsights", "sourceUrl", "imageUrl"
+            ],
             additionalProperties: false
           }
         },
@@ -100,7 +125,8 @@ const TOOLS = [
                 cookTime: { type: "string", description: "e.g., '30 mins'" },
                 servings: { type: "string", description: "e.g., '4'" },
                 ingredients: { type: "array", items: { type: "string" } },
-                instructions: { type: "array", items: { type: "string" } }
+                instructions: { type: "array", items: { type: "string" } },
+                sourceUrl: { type: "string" }
               },
               required: ["title", "description", "prepTime", "cookTime", "servings", "ingredients", "instructions"],
               additionalProperties: false
@@ -127,6 +153,7 @@ const TOOLS = [
           servings: { type: "string" },
           ingredients: { type: "array", items: { type: "string" } },
           instructions: { type: "array", items: { type: "string" } },
+          sourceUrl: { type: "string" },
           imageUrl: { type: "string", description: "Optional URL of the recipe image. Pass empty string if none." }
         },
         required: ["title", "description", "prepTime", "cookTime", "servings", "ingredients", "instructions", "imageUrl"],
