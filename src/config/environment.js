@@ -51,8 +51,12 @@ const CONFIG = {
 
   // Map the Account ID to the internal key representation.
   CLOUDFLARE_ACCOUNT_ID: CF_ACCOUNT_ID,
-  // Dynamically construct the Cloudflare AI Gateway Universal Endpoint utilizing the account ID.
-  CLOUDFLARE_AI_GATEWAY_URL: `https://gateway.ai.cloudflare.com/v1/${CF_ACCOUNT_ID}/${CF_AIG_SLUG}/compat/chat/completions`,
+  // Dynamically construct the Cloudflare AI Gateway BaseUrl utilizing the account ID and AIG Slug.
+  CLOUDFLARE_AI_GATEWAY_BASE_URL: `https://gateway.ai.cloudflare.com/v1/${CF_ACCOUNT_ID}/${CF_AIG_SLUG}`,  
+  // Dynamically construct the Cloudflare AI Gateway Universal Endpoint utilizing the baseUrl above.
+  CLOUDFLARE_AI_GATEWAY_COMPAT_URL: `${CLOUDFLARE_AI_GATEWAY_BASE_URL}/compat/chat/completions`,
+  // Dynamically construct the Cloudflare AI Gateway workers-ai image Endpoint utilizing the baseUrl above.
+  CLOUDFLARE_AI_GATEWAY_WORKERS_AI_IMAGE_URL: `${CLOUDFLARE_AI_GATEWAY_BASE_URL}/workers-ai`,
   // Dynamically construct the Cloudflare Workers AI Endpoint untilzing the account ID.
   CLOUDFLARE_WORKERS_AI_URL: `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/ai/run`, // @cf/openai/gpt-oss-120b
   // Dynamically construct the Cloudflare Browser Render Endpoint untilzing the account ID.
