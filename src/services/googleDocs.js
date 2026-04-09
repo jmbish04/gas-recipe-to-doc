@@ -99,7 +99,7 @@ function applyShrinkToFit(doc, textElement, text) {
 
 /**
  * Safely replaces a placeholder with a list.
- * Fixes "Can't remove last paragraph" exception by verifying if the element is the section's final child.
+ * Fixed: Implements "Safe Remove" pattern to prevent "Can't remove last paragraph" exceptions.
  */
 function replacePlaceholderWithList(body, placeholder, items, glyphType, parseBold = false) {
   const rangeElement = body.findText(placeholder);
@@ -111,7 +111,6 @@ function replacePlaceholderWithList(body, placeholder, items, glyphType, parseBo
   const index = parent.getChildIndex(container);
 
   if (items && items.length > 0) {
-    // Insert new items at the placeholder's current index
     items.forEach((item, i) => {
       const listItem = parent.insertListItem(index + i, item);
       listItem.setGlyphType(glyphType);
@@ -119,21 +118,18 @@ function replacePlaceholderWithList(body, placeholder, items, glyphType, parseBo
     });
 
     /**
-     * REFINED SAFE REMOVE:
-     * Check if the container is the last child of its parent (e.g., end of Body or TableCell).
-     * If it is the last child, we clear its text instead of removing it to satisfy the 
-     * structural requirement of having at least one trailing paragraph.
+     * SAFE REMOVE PATTERN:
+     * Google Docs requires at least one paragraph-like element per section/cell.
+     * We try to remove the placeholder; if it fails (terminal position), we clear it instead.
      */
-    const isLastChild = (parent.getChildIndex(container) === parent.getNumChildren() - 1);
-    
-    if (!isLastChild) {
+    try {
       container.removeFromParent();
-    } else {
-      // Clear text but keep paragraph to avoid structural violation
-      element.asText().setText("");
+    } catch (e) {
+      // Catching "Can't remove last paragraph" error.
+      element.asText().setText(""); 
     }
   } else {
-    // No items to add? Just clear the placeholder text
+    // No items? Clear the placeholder.
     element.asText().setText("");
   }
 }
@@ -192,6 +188,7 @@ function processCloudflareImage(body, recipe) {
       placeholder.getElement().asText().setText('');
     }
   } catch (e) {
+    console.log(`[processCloudflareImage] ${JSON.stringify(e)}`);
     body.replaceText('{{IMAGE}}', '[Image Load Error]');
   }
 }
