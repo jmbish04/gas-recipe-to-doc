@@ -138,7 +138,7 @@ function executeAgentStep(messages, isFallback = false) {
           content: resultObj.response || "",
           tool_calls: resultObj.tool_calls ? resultObj.tool_calls.map(function(tc) {
               return {
-                  id: "call_" + Math.random().toString(36).substr(2, 9),
+                  id: `call_${Utilities.getUuid()}`,
                   type: "function",
                   function: {
                       name: tc.name,
