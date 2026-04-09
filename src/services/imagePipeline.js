@@ -19,6 +19,8 @@ function scrapeImagesFromUrl(targetUrl) {
 
   const endpoint = `${CONFIG.CLOUDFLARE_BROWSER_RENDER_URL}/scrape`;
 
+  console.log(`[scrapeImagesFromUrl] Scraping images from: ${targetUrl}`);
+
   const payload = {
     url: targetUrl,
     elements: [
@@ -64,6 +66,7 @@ function scrapeImagesFromUrl(targetUrl) {
       });
     }
 
+    console.log(`[scrapeImagesFromUrl] Scraped the following image urls: ${imageUrls.toString()}`);
     return imageUrls;
 
   } catch (error) {
@@ -91,6 +94,8 @@ function getRecipeImageUrl(recipeName) {
 
   const endpoint = `https://customsearch.googleapis.com/customsearch/v1?q=${searchQuery}&cx=${searchEngineId}&key=${apiKey}&searchType=image&num=1&imgSize=large&safe=high`;
 
+  console.log(`[getRecipeImageUrl] Running a google search for images: ${endpoint}`);
+  
   const options = {
     method: "get",
     muteHttpExceptions: true
@@ -108,9 +113,12 @@ function getRecipeImageUrl(recipeName) {
     const data = JSON.parse(responseBody);
 
     if (data.items && data.items.length > 0 && data.items[0].link) {
-      return data.items[0].link;
+      const link = data.items[0].link;;
+      console.log(`[getRecipeImageUrl] Returning a Google search image link: ${link}`);
+      return link;
     }
 
+    console.log(`[getRecipeImageUrl] No images on Google Image search.`);
     return null;
 
   } catch (error) {
