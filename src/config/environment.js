@@ -13,7 +13,7 @@ const CF_ACCOUNT_ID = scriptProps.getProperty('CLOUDFLARE_ACCOUNT_ID');
 
 
 // Extract the Cloudflare Auth Token for direct API calls
-const CF_AUTH_TOKEN = scriptProps.getProperty('CLOUDFLARE_AUTH_TOKEN');
+const CF_WRANGLER_API_TOKEN = scriptProps.getProperty('CLOUDFLARE_WRANGLER_API_TOKEN');
 
 // Extract the Cloudflare AI Gateway Token used for securely routing requests through CF Gateway.
 const CF_AIG_TOKEN = scriptProps.getProperty('CLOUDFLARE_AI_GATEWAY_TOKEN');
@@ -54,7 +54,7 @@ const CONFIG = {
   // Map the AIG Token to the internal key representation.
   CLOUDFLARE_AI_GATEWAY_TOKEN: CF_AIG_TOKEN,
   // Map the Auth Token to the internal key representation.
-  CLOUDFLARE_AUTH_TOKEN: CF_AUTH_TOKEN,
+  CLOUDFLARE_WRANGLER_API_TOKEN: CF_WRANGLER_API_TOKEN,
   // Map the Browser Render API Token to the internal key representation.
   CLOUDFLARE_BROWSER_RENDER_TOKEN: CF_BROWSER_RENDER_TOKEN,
   // Map the Images API Token to the internal key representation.
