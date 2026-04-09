@@ -92,7 +92,7 @@ function executeAgentStep(messages, isFallback = false) {
       }
       endpointUrl = 'https://api.cloudflare.com/client/v4/accounts/' + CONFIG.CLOUDFLARE_ACCOUNT_ID + '/ai/run/' + actualModel;
       headers = {
-          'Authorization': 'Bearer ' + (CONFIG.CLOUDFLARE_AUTH_TOKEN || CONFIG.CLOUDFLARE_AI_GATEWAY_KEY)
+          'Authorization': 'Bearer ' + CONFIG.CLOUDFLARE_AUTH_TOKEN
       };
       delete payload.model;
   }
