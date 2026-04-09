@@ -104,59 +104,96 @@ function _logToSheet_(type, name, details, url) {
     if (!sheet) {
       sheet = ss.insertSheet(CONFIG.HISTORY_SHEET_NAME);
       // Inject standard column headers for the newly created sheet.
-      sheet.appendRow(['Timestamp', 'Type', 'Name', 'Details', 'URL']);
+      sheet.appendRow(['Timestamp', 'Session ID', 'Type', 'Name', 'Details', 'URL']);
       // Freeze the top row to lock headers for visual scrolling.
       sheet.setFrozenRows(1);
 
       // Initialize full-column wrapping for the data columns D & E to ensure manual entries wrap.
-      sheet.getRange("D:E").setWrap(true);
+      sheet.getRange("E:F").setWrap(true);
+      
+      // Standardize formatting for new sheet
+      sheet.getRange(1, 1, 1, headers.length)
+           .setBackground("#3c81f3")
+           .setFontWeight("bold")
+           .setFontColor('white');      
     }
 
     // Append the telemetry data array directly to the bottom of the active sheet.
-    sheet.appendRow([new Date(), type, name, details, url]);
+    sheet.appendRow([
+      new Date(), 
+      CONFIG.SESSION_ID || "N/A", 
+      type, 
+      name, 
+      details, 
+      url
+    ]);    
 
-    // Dynamically fetch the last appended row and apply text wrapping to the "Details" (Col 4) and "url" (Col 5) cells.
-    sheet.getRange(sheet.getLastRow(), 4, 1, 2).setWrap(true);
+    // Dynamically fetch the last appended row and apply text wrapping to the "Details" (Col 5) and "url" (Col 6) cells.
+    sheet.getRange(sheet.getLastRow(), 5, 1, 2).setWrap(true);
   } catch (logErr) {
     // Suppress catastrophic failure. Telemetry errors should NEVER crash the main execution loop.
     console.error(`[_logToSheet_] Failed to log to sheet "${CONFIG.HISTORY_SHEET_NAME}": ${JSON.stringify(logErr)}`);
   }
 }
 
+
 /**
- * Internal raw logging utility. Handles direct telemetry writes to the Google Sheet.
- * @private
- * @param {string} functionName - The function name where the message was sent to console.
- * @param {string} errorMessage - The Pretty prepared error message.
- * @param {string} errorObject - The e object caught by the handler, stringified.
- * @param {string} details - Secondary metadata or serialized context.
+ * Logs telemetry data to a centralized Google Sheet.
+ * Includes session isolation and visual error highlighting.
  */
-function _logTelemetryToSheet_(functionName, errorMessage, errorObject, details) {
+function _logTelemetryToSheet_(functionName, errorMessage, errorObject, details, isError = false) {
   try {
-    // Open the master logging spreadsheet. (Hardcoded per requirement)
+    // Open the master logging spreadsheet.
     const ss = SpreadsheetApp.openById(CONFIG.LOG_SHEET_ID);
 
-    // Attempt to resolve the specific worksheet.
+    // Attempt to resolve the telemetry worksheet.
     let sheet = ss.getSheetByName(CONFIG.TELEMETRY_SHEET_NAME);
 
-    // Implement an auto-healing mechanism: if the sheet was deleted, recreate it instantly.
+    // Column Mapping:
+    // 1: Timestamp | 2: Session ID | 3: Function Name | 4: Status | 5: Error Message | 6: Error Object | 7: Details
+    const headers = ['Timestamp', 'Session ID', 'Function Name', 'Status', 'Error Message', 'Error Object', 'Details'];
+
+    // Auto-healing: Recreate sheet if missing.
     if (!sheet) {
       sheet = ss.insertSheet(CONFIG.TELEMETRY_SHEET_NAME);
-      // Inject standard column headers for the newly created sheet.
-      sheet.appendRow(['Timestamp', 'Function Name', 'Error Message', 'Error Object', 'Details']);
-      // Freeze the top row to lock headers for visual scrolling.
+      sheet.appendRow(headers);
       sheet.setFrozenRows(1);
-
-      // Initialize full-column wrapping for the data columns D & E to ensure manual entries wrap.
-      sheet.getRange("D:E").setWrap(true);
+      
+      // Standardize formatting for new sheet
+      sheet.getRange("F:G").setWrap(true); 
+      sheet.getRange(1, 1, 1, headers.length)
+           .setBackground("#3c81f3")
+           .setFontWeight("bold")
+           .setFontColor('white');
     }
 
-    // Append the telemetry data array directly to the bottom of the active sheet.
-    sheet.appendRow([new Date(), functionName, errorMessage, errorObject, details]);
-    // Dynamically fetch the last appended row and apply text wrapping to the "Error Object" (Col 4) and "Details" (Col 5) cells.
-    sheet.getRange(sheet.getLastRow(), 4, 1, 2).setWrap(true);
+    // Prepare the status label
+    const status = isError ? "ERROR" : "SUCCESS";
+
+    // Append the telemetry data including the new Session ID and Status column
+    sheet.appendRow([
+      new Date(), 
+      CONFIG.SESSION_ID || "N/A", 
+      functionName, 
+      status, 
+      errorMessage || "", 
+      errorObject || "", 
+      details || ""
+    ]);
+
+    const lastRow = sheet.getLastRow();
+    const rowRange = sheet.getRange(lastRow, 1, 1, headers.length);
+
+    // If an error is detected, highlight the entire row in light red
+    if (isError) {
+      rowRange.setBackground("#f4cccc"); // Light Red 3
+    }
+
+    // Apply text wrapping to the complex data fields (Cols 6 & 7: Error Object and Details)
+    sheet.getRange(lastRow, 6, 1, 2).setWrap(true);
+
   } catch (logErr) {
-    // Suppress catastrophic failure. Telemetry errors should NEVER crash the main execution loop.
-    console.error(`[_logTelemetryToSheet_] Failed to log to sheet "${CONFIG.TELEMETRY_SHEET_NAME}": ${JSON.stringify(logErr)}`);
+    // Suppress catastrophic failure to prevent telemetry loops from crashing the core logic.
+    console.error(`[_logTelemetryToSheet_] Critical logging failure: ${logErr.message}`);
   }
 }
