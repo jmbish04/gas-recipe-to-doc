@@ -99,23 +99,26 @@ function applyShrinkToFit(doc, textElement, text) {
 }
 
 /**
- * Helper to replace a placeholder with a native Google Doc list.
+ * Safely replaces a placeholder with a list, regardless of container type.
  */
 function replacePlaceholderWithList(body, placeholder, items, glyphType, parseBold = false) {
   const rangeElement = body.findText(placeholder);
   if (!rangeElement) return;
 
-  const placeholderParagraph = rangeElement.getElement().getParent().asParagraph();
-  const parent = placeholderParagraph.getParent();
-  const index = parent.getChildIndex(placeholderParagraph);
+  const placeholderElement = rangeElement.getElement();
+  const container = placeholderElement.getParent();
+  const parentContainer = container.getParent(); // Usually Body or TableCell
+  const index = parentContainer.getChildIndex(container);
 
   items.forEach((item, i) => {
-    const listItem = body.insertListItem(index + i, item);
+    // We insert into the parent container (Body) at the position of the placeholder
+    const listItem = parentContainer.insertListItem(index + i, item);
     listItem.setGlyphType(glyphType);
     if (parseBold) processMarkdownBold(listItem.editAsText(), item);
   });
 
-  placeholderParagraph.removeFromParent();
+  // Remove the original container (could be a Paragraph or a ListItem)
+  container.removeFromParent();
 }
 
 /**
