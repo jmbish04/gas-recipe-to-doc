@@ -49,8 +49,9 @@ function executeAgentStep(messages, isFallback = false) {
   const startTime = Date.now();
   console.log(`[executeAgentStep] START`);
   logTelemetry(executeAgentStep, 'Function started', { isFallback: isFallback });
+  const workersAiModelName = _sanitizeWorkersAiModelName_(CONFIG.AI_MODEL_FALLBACK_NAME);
 
-  const model = isFallback ? CONFIG.AI_MODEL_FALLBACK_NAME : CONFIG.AI_MODEL;
+  const model = isFallback ? workersAiModelName: CONFIG.AI_MODEL;
   
   console.log(`[executeAgentStep] STEP: Sanitizing messages for model ${model} (+${Date.now() - startTime}ms)`);
   const sanitizedMessages = messages.map(msg => ({
