@@ -4,8 +4,14 @@
 
 function createRecipeDoc(recipe) {
   let templateFile, folder;
-  try { templateFile = DriveApp.getFileById(CONFIG.TEMPLATE_ID); } catch(e) { console.error("Template access failed"); }
-  try { folder = DriveApp.getFolderById(CONFIG.FOLDER_ID); } catch(e) { console.error("Folder access failed"); }
+  const errors = [];
+  try { templateFile = DriveApp.getFileById(CONFIG.TEMPLATE_ID); } catch(e) { errors.push(`Template access failed: ${JSON.stringify(e)}`); }
+  try { folder = DriveApp.getFolderById(CONFIG.FOLDER_ID); } catch(e) { errors.push(`Folder access failed: ${JSON.stringify(e)}`); }
+
+  if(errors.length > 0){
+    const errorMessage = `[createRecipeDoc] There have been blocking errors preventing the recipe from export to docs: ${errors.join('\n'}`;
+    throw new Error(errorMessage);
+  }
 
   const newFile = templateFile.makeCopy('Recipe: ' + recipe.title, folder);
   const doc = DocumentApp.openById(newFile.getId());
