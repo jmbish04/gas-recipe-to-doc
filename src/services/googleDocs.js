@@ -30,6 +30,8 @@ function createRecipeDoc(recipe) {
   body.replaceText('{{COOK_TIME}}', recipe.cookTime || 'N/A');
   body.replaceText('{{PREP_TIME}}', recipe.prepTime || 'N/A');
   body.replaceText('{{SERVINGS}}', recipe.servings || '1-2');
+  body.replaceText('{{CALORIES}}', recipe.calories || 'unknown calories');
+  body.replaceText('{{TIPS}}', recipe.calories || 'No specific tips, just have fun!');
 
   const ingredientsText = (recipe.ingredients || []).map(function(item) { return '\u2022 ' + item; }).join('\n');
   body.replaceText('{{INGREDIENTS}}', ingredientsText);
