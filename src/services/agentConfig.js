@@ -45,28 +45,28 @@ const RESPONSE_FORMAT = {
               prepTime: { type: "string" },
               cookTime: { type: "string" },
               servings: { type: "string" },
-              calories: { type: "string", description: "230 Calories" },
+              calories: { type: "string", description: "e.g., '230 kcal'" },
               ingredients: { type: "array", items: { type: "string" } },
               instructions: { type: "array", items: { type: "string" } },
-              "culinaryScience": {
-                "type": "array",
-                "items": { "type": "string" },
-                "description": "An array of 3-5 expert-level culinary tips explaining the 'why' behind the cooking process. Focus on ingredient science (e.g., starch management, moisture control) and advanced heat techniques (e.g., Maillard reaction, carryover cooking)."
+              culinaryScience: {
+                type: "array",
+                items: { type: "string" },
+                description: "Expert-level culinary tips explaining the 'why' behind the process. Focus on ingredient science (starch management, moisture control) and advanced heat techniques (Maillard reaction, carryover cooking)."
               },
-              "restaurantTechniques": {
-                "type": "array",
-                "items": { "type": "string" },
-                "description": "Actionable tips to elevate this recipe to restaurant quality. Include advice on creating texture contrasts, achieving perfect plating, selecting optimal ingredient substitutions, and adding professional finishing garnishes."
+              restaurantTechniques: {
+                type: "array",
+                items: { type: "string" },
+                description: "Actionable tips to elevate this recipe to restaurant quality. Include advice on texture contrasts, plating, ingredient substitutions, and professional garnishes."
               },
-              "troubleshooting": {
-                "type": "array",
-                "items": { "type": "string" },
-                "description": "Crucial tips to prevent common mistakes with this specific dish. Include advice on visual and sensory cues for doneness, temperature management, and how to fix the flavor profile if it becomes unbalanced."
+              troubleshooting: {
+                type: "array",
+                items: { type: "string" },
+                description: "Crucial tips to prevent common mistakes. Include advice on visual/sensory cues for doneness, temperature management, and how to fix an unbalanced flavor profile."
               },
-              "chefInsights": {
-                "type": "array",
-                "items": { "type": "string" },
-                "description": "Advanced flavor balancing tips (salt, fat, acid, heat) and holistic insights to elevate the dish beyond the basic instructions."
+              chefInsights: {
+                type: "array",
+                items: { type: "string" },
+                description: "Advanced flavor balancing tips (salt, fat, acid, heat) and holistic insights to elevate the dish beyond basic instructions."
               },
               sourceUrl: { type: "string" },
               imageUrl: { type: "string" }
@@ -107,6 +107,7 @@ const TOOLS = [
     }
   },
   {
+{
     type: "function",
     function: {
       name: "propose_recipes",
@@ -119,14 +120,35 @@ const TOOLS = [
             items: {
               type: "object",
               properties: {
-                title: { type: "string" },
-                description: { type: "string" },
-                prepTime: { type: "string", description: "e.g., '15 mins'" },
-                cookTime: { type: "string", description: "e.g., '30 mins'" },
-                servings: { type: "string", description: "e.g., '4'" },
-                ingredients: { type: "array", items: { type: "string" } },
-                instructions: { type: "array", items: { type: "string" } },
-                sourceUrl: { type: "string" }
+                title: { type: "string", description: "The official name of the dish." },
+                description: { type: "string", description: "A high-level summary of the dish's flavor profile and history." },
+                prepTime: { type: "string", description: "Estimated active preparation time, e.g., '15 mins'." },
+                cookTime: { type: "string", description: "Estimated cooking or baking time, e.g., '30 mins'." },
+                servings: { type: "string", description: "The number of people the recipe serves, e.g., '4'." },
+                calories: { type: "string", description: "Approximate calorie count per serving, e.g., '450 kcal'." },
+                ingredients: { type: "array", items: { type: "string" }, description: "Complete list of ingredients with precise measurements." },
+                instructions: { type: "array", items: { type: "string" }, description: "Step-by-step cooking sequence." },
+                culinaryScience: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "Expert-level culinary tips explaining the 'why' behind the cooking process (e.g., starch gelatinization, protein denaturing)."
+                },
+                restaurantTechniques: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "Professional techniques to improve presentation, texture, or efficiency (e.g., proper knife skills, tempering, reduction)."
+                },
+                troubleshooting: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "Warning signs for overcooking, under-seasoning, or structural failure and how to correct them in real-time."
+                },
+                chefInsights: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "Personal insights on flavor pairings, regional variations, or seasonal adjustments."
+                },
+                sourceUrl: { type: "string", description: "The original reference URL for this recipe discovery." }
               },
               required: ["title", "description", "prepTime", "cookTime", "servings", "ingredients", "instructions"],
               additionalProperties: false
