@@ -38,3 +38,10 @@ function _redactUrl(url) {
 function _prettyStringifyJsonObject_(jsonObject) {
   return JSON.stringify(jsonObject, null, 2);
 }
+
+/**
+ * Helper to safeguard workers-ai padding on aiGateway handling.
+ */
+function _sanitizeWorkersAiModelName_(workersAiModelName) {
+  return `workers-ai/${workersAiModelName.replace('workers-ai/', '')}`; 
+}
