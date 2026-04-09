@@ -11,12 +11,13 @@
  * @param {string} apiToken - Your Cloudflare API Token (requires Browser Rendering Edit permissions).
  * @returns {string[]} An array of image URLs extracted from the page.
  */
-function scrapeImagesFromUrl(targetUrl, accountId, apiToken) {
-  if (!targetUrl || !accountId || !apiToken) {
-    throw new Error("Missing required parameters: targetUrl, accountId, or apiToken.");
+function scrapeImagesFromUrl(targetUrl) {
+  const apiToken = CONFIG.CLOUDFLARE_BROWSER_RENDER_TOKEN;
+  if (!targetUrl) {
+    throw new Error(`[scrapeImagesFromUrl] Missing required parameter: targetUrl; We received ${targetUrl}`);
   }
 
-  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${accountId}/browser-rendering/scrape`;
+  const endpoint = `${CONFIG.CLOUDFLARE_BROWSER_RENDER_URL}/scrape`;
 
   const payload = {
     url: targetUrl,
@@ -47,7 +48,7 @@ function scrapeImagesFromUrl(targetUrl, accountId, apiToken) {
     const data = JSON.parse(responseBody);
 
     if (!data.success) {
-      throw new Error(`Browser Rendering failed: ${JSON.stringify(data.errors)}`);
+      throw new Error(`[scrapeImagesFromUrl] Browser Rendering failed: ${JSON.stringify(data)}`);
     }
 
     const imageUrls = [];
@@ -66,7 +67,7 @@ function scrapeImagesFromUrl(targetUrl, accountId, apiToken) {
     return imageUrls;
 
   } catch (error) {
-    console.error("Error scraping images:", error);
+    console.error("[scrapeImagesFromUrl] Error scraping images:", error);
     throw error;
   }
 }
@@ -78,9 +79,12 @@ function scrapeImagesFromUrl(targetUrl, accountId, apiToken) {
  * @param {string} searchEngineId - Your Programmable Search Engine ID.
  * @returns {string|null} The URL of the highest-ranking image, or null if no results exist.
  */
-function getRecipeImageUrl(recipeName, apiKey, searchEngineId) {
-  if (!recipeName || !apiKey || !searchEngineId) {
-    throw new Error("Missing required parameters: recipeName, apiKey, or searchEngineId.");
+function getRecipeImageUrl(recipeName) {
+  const apiKey = CONFIG.SEARCH_API_KEY;
+  const searchEngineId = CONFIG.SEARCH_CX;
+  
+  if (!recipeName) {
+    throw new Error(`Missing required parameter: recipeName. We received ${recipeName}`);
   }
 
   const searchQuery = encodeURIComponent(`${recipeName} prepared dish plated food photography`);
@@ -98,7 +102,7 @@ function getRecipeImageUrl(recipeName, apiKey, searchEngineId) {
     const responseBody = response.getContentText();
 
     if (statusCode >= 400) {
-      throw new Error(`Google CSE API Error (${statusCode}): ${responseBody}`);
+      throw new Error(`[getRecipeImageUrl] Google CSE API Error (${statusCode}): ${responseBody}`);
     }
 
     const data = JSON.parse(responseBody);
@@ -110,7 +114,7 @@ function getRecipeImageUrl(recipeName, apiKey, searchEngineId) {
     return null;
 
   } catch (error) {
-    console.error("Error fetching recipe image:", error);
+    console.error("[getRecipeImageUrl] Error fetching recipe image:", error);
     throw error;
   }
 }
@@ -118,8 +122,9 @@ function getRecipeImageUrl(recipeName, apiKey, searchEngineId) {
 /**
  * Uploads an image blob to Cloudflare Images API to get a persistent delivery URL.
  */
-function uploadToCloudflareImages(rawImageBlob, accountId, apiToken) {
-    const cfEndpoint = `https://api.cloudflare.com/client/v4/accounts/${accountId}/images/v1`;
+function uploadToCloudflareImages(rawImageBlob) {
+    const cfEndpoint = CONFIG.CLOUDFLARE_IMAGES_URL;
+    const apiToken = CONFIG.CLOUDFLARE_IMAGES_STREAM_TOKEN;
 
     const cfPayload = {
       file: rawImageBlob,
@@ -145,12 +150,12 @@ function uploadToCloudflareImages(rawImageBlob, accountId, apiToken) {
 
     const cfData = JSON.parse(cfResponseBody);
     if (!cfData.success) {
-      throw new Error(`Cloudflare Images upload failed: ${JSON.stringify(cfData.errors)}`);
+      throw new Error(`[uploadToCloudflareImages] Cloudflare Images upload failed: ${JSON.stringify(cfData)}`);
     }
 
     const variants = cfData.result.variants;
     if (!variants || variants.length === 0) {
-      throw new Error("No variants returned from Cloudflare Images.");
+      throw new Error("[uploadToCloudflareImages] No variants returned from Cloudflare Images.");
     }
 
     return variants.find(v => v.endsWith("/public")) || variants[0];
@@ -163,36 +168,36 @@ function uploadToCloudflareImages(rawImageBlob, accountId, apiToken) {
  * @returns {Array} - The recipes augmented with Cloudflare delivery image URLs.
  */
 function enrichRecipesWithImages(recipes) {
-  const props = PropertiesService.getScriptProperties();
-  const CLOUDFLARE_ACCOUNT_ID = props.getProperty('CLOUDFLARE_ACCOUNT_ID');
-  const CLOUDFLARE_BROWSER_TOKEN = props.getProperty('CLOUDFLARE_BROWSER_RENDER_TOKEN');
-  const CLOUDFLARE_IMAGES_TOKEN = props.getProperty('CLOUDFLARE_IMAGES_STREAM_TOKEN');
-  const GOOGLE_API_KEY = props.getProperty('GOOGLE_SEARCH_API_KEY') || CONFIG.SEARCH_API_KEY;
-  const GOOGLE_CX = props.getProperty('GOOGLE_SEARCH_CX') || CONFIG.SEARCH_CX;
+  
+  const CLOUDFLARE_ACCOUNT_ID = CONFIG.CLOUDFLARE_ACCOUNT_ID;
+  const CLOUDFLARE_BROWSER_TOKEN = CONFIG.CLOUDFLARE_BROWSER_RENDER_TOKEN;
+  const CLOUDFLARE_IMAGES_TOKEN = CONFIG.CLOUDFLARE_IMAGES_STREAM_TOKEN;
+  const SEARCH_API_KEY = CONFIG.SEARCH_API_KEY;
+  const SEARCH_ENGINE_ID = CONFIG.SEARCH_CX;
 
   // For each recipe, try to get a raw image URL first
   const rawUrls = recipes.map(recipe => {
     let rawUrl = null;
 
     // 1. If we have a source URL, attempt to scrape image
-    if (recipe.sourceUrl && CLOUDFLARE_ACCOUNT_ID && CLOUDFLARE_BROWSER_TOKEN) {
+    if (recipe.sourceUrl) {
       try {
-        const scrapedImages = scrapeImagesFromUrl(recipe.sourceUrl, CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_BROWSER_TOKEN);
+        const scrapedImages = scrapeImagesFromUrl(recipe.sourceUrl);
         if (scrapedImages && scrapedImages.length > 0) {
             // Select the most likely hero image - could be first large one, for now pick first
             rawUrl = scrapedImages[0];
         }
       } catch (err) {
-        console.warn("Scraping failed for " + recipe.sourceUrl + ": " + err.message);
+        console.warn(`[enrichRecipesWithImages] Scraping failed for ${recipe.sourceUrl}: ${JSON.stringify(err)}`);
       }
     }
 
     // 2. Fallback to Google Image Search if no raw URL yet
-    if (!rawUrl && GOOGLE_API_KEY && GOOGLE_CX) {
+    if (!rawUrl) {
        try {
-           rawUrl = getRecipeImageUrl(recipe.title, GOOGLE_API_KEY, GOOGLE_CX);
+           rawUrl = getRecipeImageUrl(recipe.title);
        } catch (err) {
-           console.warn("Google Image Search failed for " + recipe.title + ": " + err.message);
+           console.warn(`[enrichRecipesWithImages] Google Image Search failed for ${recipe.title}: ${err.message}`);
        }
     }
 
@@ -220,7 +225,7 @@ function enrichRecipesWithImages(recipes) {
               }
           }
       } catch (err) {
-          console.warn("Failed to bulk fetch image blobs: " + err.message);
+          console.warn(`[enrichRecipesWithImages] Failed to bulk fetch image blobs: ${JSON.stringify(err)}`);
       }
   }
 
@@ -230,11 +235,11 @@ function enrichRecipesWithImages(recipes) {
       let finalUrl = "";
       const blob = blobsMap[index];
 
-      if (blob && CLOUDFLARE_ACCOUNT_ID && CLOUDFLARE_IMAGES_TOKEN) {
+      if (blob) {
           try {
-              finalUrl = uploadToCloudflareImages(blob, CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_IMAGES_TOKEN);
+              finalUrl = uploadToCloudflareImages(blob);
           } catch (uploadErr) {
-              console.warn("Failed to upload " + recipe.title + " image to CF: " + uploadErr.message);
+              console.warn(`[enrichRecipesWithImages] Failed to upload ${recipe.title} image to CF: ${JSON.stringify(uploadErr)}`);
               // Fallback to the raw URL if CF upload fails but we still want an image
               finalUrl = rawUrls[index] || "";
           }
@@ -253,14 +258,13 @@ function enrichRecipesWithImages(recipes) {
  * @param {string} docId - The Google Document ID.
  */
 function processAndInjectRecipeImage(cloudflareImageUrl, docId) {
-  if (!cloudflareImageUrl || !docId) {
-    throw new Error("Missing required parameters for image injection.");
-  }
+  if (!cloudflareImageUrl) throw new Error(`[processAndInjectRecipeImage] Missing required parameter: 'cloudflareImageUrl'; Here's what we received ${cloudflareImageUrl}`);
+  if (!docId) throw new Error(`[processAndInjectRecipeImage] Missing required parameter: 'docId'; Here's what we received ${docId}`);
 
   try {
     const optimizedResponse = UrlFetchApp.fetch(cloudflareImageUrl, { muteHttpExceptions: true });
     if (optimizedResponse.getResponseCode() >= 400) {
-      throw new Error(`Failed to fetch optimized image from Cloudflare: ${optimizedResponse.getResponseCode()}`);
+      throw new Error(`[processAndInjectRecipeImage] Failed to fetch optimized image from Cloudflare: ${optimizedResponse.getResponseCode()}`);
     }
     const optimizedBlob = optimizedResponse.getBlob();
 
@@ -297,4 +301,97 @@ function processAndInjectRecipeImage(cloudflareImageUrl, docId) {
     console.error("Image injection pipeline failed:", error);
     throw error;
   }
+}
+
+
+
+/**
+ * Orchestrates fetching from Cloudflare and precise injection into a Doc.
+ * @param {string} cloudflareImageUrl - The delivery URL (e.g., https://imagedelivery.net/<ID>/<VARIANT>).
+ * @param {string} docId - Target Google Document ID.
+ * @returns {string} The processed URL for logging.
+ */
+function processAndInjectRecipeImage(cloudflareImageUrl, docId) {
+  if (!cloudflareImageUrl) throw new Error(`[processAndInjectRecipeImage] Missing required parameter: 'cloudflareImageUrl'; Here's what we received ${cloudflareImageUrl}`);
+  if (!docId) throw new Error(`[processAndInjectRecipeImage] Missing required parameter: 'docId'; Here's what we received ${docId}`);
+
+  const TARGET_WIDTH = 500;
+  
+  try {
+    // 1. Optimize the Fetch: Request only the width we need from Cloudflare
+    // Assumes flexible variants are enabled or uses standard URL params
+    const optimizedUrl = cloudflareImageUrl.includes('?') 
+      ? `${cloudflareImageUrl}&width=${TARGET_WIDTH}` 
+      : `${cloudflareImageUrl}/w=${TARGET_WIDTH}`;
+
+    const response = UrlFetchApp.fetch(optimizedUrl, { 
+      muteHttpExceptions: true,
+      headers: { "Accept": "image/webp,image/png,image/*" }
+    });
+
+    if (response.getResponseCode() !== 200) {
+      throw new Error(`[processAndInjectRecipeImage] Cloudflare delivery failed: ${response.getResponseCode()}`);
+    }
+
+    const imageBlob = response.getBlob();
+    const doc = DocumentApp.openById(docId);
+    const body = doc.getBody();
+    const placeholder = body.findText('{{IMAGE}}');
+
+    if (placeholder) {
+      injectAtExactPlaceholder(placeholder, imageBlob, TARGET_WIDTH);
+    } else {
+      appendAndScale(body, imageBlob, TARGET_WIDTH);
+    }
+
+    doc.saveAndClose();
+    return optimizedUrl;
+
+  } catch (error) {
+    console.error(`[processAndInjectRecipeImage]: ${JSON.stringify(error)}`);
+    throw error;
+  }
+}
+
+/**
+ * Injects image exactly where the placeholder text is located.
+ * Logic: Splits the text element to maintain "Certain Position" integrity.
+ */
+function injectAtExactPlaceholder(rangeElement, blob, targetWidth) {
+  const textElement = rangeElement.getElement().asText();
+  const startOffset = rangeElement.getStartOffset();
+  const endOffset = rangeElement.getEndOffsetInclusive();
+  const parent = textElement.getParent();
+  
+  // Calculate child index of the text node within the paragraph
+  const childIndex = parent.getChildIndex(textElement);
+
+  // If placeholder isn't the whole text, we handle the 'Surrounding Text' case
+  // But for standard placeholders, we insert relative to the text node
+  const img = parent.asParagraph().insertInlineImage(childIndex + 1, blob);
+  
+  // Clean up: Remove the placeholder text precisely
+  textElement.deleteText(startOffset, endOffset);
+  
+  scaleImage(img, targetWidth);
+}
+
+/**
+ * Fallback: Appends image to the end of the document.
+ */
+function appendAndScale(body, blob, targetWidth) {
+  const img = body.appendImage(blob);
+  scaleImage(img, targetWidth);
+}
+
+/**
+ * Maintains aspect ratio while scaling to target width.
+ */
+function scaleImage(img, targetWidth) {
+  const originalWidth = img.getWidth() || 1;
+  const originalHeight = img.getHeight() || 1;
+  const ratio = targetWidth / originalWidth;
+  
+  img.setWidth(targetWidth);
+  img.setHeight(Math.max(Math.round(originalHeight * ratio), 1));
 }
