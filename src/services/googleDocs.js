@@ -63,7 +63,7 @@ function createRecipeDoc(recipe) {
   replacePlaceholderWithList(body, '{{TROUBLESHOOTING}}', recipe.troubleshooting || [], DocumentApp.GlyphType.BULLET);
 
   // 4. Persistent Image Actuation
-  processCloudflareImage(body, recipe, CF_ACCOUNT_ID, CF_TOKEN);
+  processCloudflareImage(body, recipe);
 
   // Mandatory save and close to flush changes immediately
   doc.saveAndClose();
@@ -163,7 +163,8 @@ function processMarkdownBold(textElement, rawText) {
 /**
  * Cloudflare Image logic for persistence.
  */
-function processCloudflareImage(body, recipe, accountId, token) {
+function processCloudflareImage(body, recipe) {
+  const token = CONFIG.CLOUDFLARE_IMAGES_STREAM_TOKEN;
   let finalImageUrl = recipe.imageUrl;
   if (!finalImageUrl) {
     body.replaceText('{{IMAGE}}', '');
@@ -171,7 +172,7 @@ function processCloudflareImage(body, recipe, accountId, token) {
   }
 
   try {
-    const cfApiUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/images/v1`;
+    const cfApiUrl = CONFIG.CLOUDFLARE_IMAGES_URL;
     const uploadResponse = UrlFetchApp.fetch(cfApiUrl, {
       method: 'post',
       headers: { 'Authorization': 'Bearer ' + token },
