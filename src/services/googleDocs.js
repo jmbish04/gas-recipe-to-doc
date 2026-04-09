@@ -66,7 +66,7 @@ function createRecipeDoc(recipe) {
   processCloudflareImage(body, recipe, CF_ACCOUNT_ID, CF_TOKEN);
 
   doc.saveAndClose();
-  const docUrl = 'https://docs.google.com/document/d/' + newFile.getId() + '/edit';
+  const docUrl = newFile.getUrl();
 
   if (typeof logExport === 'function') logExport(recipe, docUrl);
   return JSON.stringify({ docId: newFile.getId(), url: docUrl });
