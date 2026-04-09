@@ -136,6 +136,10 @@ function executeAgentStep(messages, isFallback = false) {
 function finalizeOutput(content) {
   try {
     const data = JSON.parse(content);
+    const keys = Object.keys(data).toString().toLowerCase();
+    
+    if(keys.indexOf('proposals') === -1) data.proposals = [];
+    
     return JSON.stringify({ type: "final", response: data });
   } catch (e) {
     return JSON.stringify({
