@@ -12,7 +12,7 @@
  */
 function logExport(recipeData, docUrl) {
   // Serialize specific metadata fields to prevent sheet cell bloat while retaining analytics value.
-  const details = JSON.stringify({
+  const details = _prettyStringifyJsonObject_({
     description: recipeData.description,
     cookTime: recipeData.cookTime,
     prepTime: recipeData.prepTime,
@@ -33,14 +33,15 @@ function logExport(recipeData, docUrl) {
  */
 function logTelemetry(functionName, errorMessage, errorObject) {
   // Serialize specific metadata fields to prevent sheet cell bloat while retaining analytics value.
-  const details = JSON.stringify({
+  const details = _prettyStringifyJsonObject_({
+    timestamp: _getTimestampPstString_(),
     functionName,
     errorMessage,
     errorObject
   });
 
   // Hand off the formatted payload to the internal raw logging function.
-  _logTelemetryToSheet_(functionName, errorMessage, details);
+  _logTelemetryToSheet_(functionName, errorMessage, _prettyStringifyJsonObject_(errorObject), details);
 }
 
 /**
@@ -106,10 +107,16 @@ function _logToSheet_(type, name, details, url) {
       sheet.appendRow(['Timestamp', 'Type', 'Name', 'Details', 'URL']);
       // Freeze the top row to lock headers for visual scrolling.
       sheet.setFrozenRows(1);
+
+      // Initialize full-column wrapping for the data columns D & E to ensure manual entries wrap.
+      sheet.getRange("D:E").setWrap(true);
     }
 
     // Append the telemetry data array directly to the bottom of the active sheet.
     sheet.appendRow([new Date(), type, name, details, url]);
+
+    // Dynamically fetch the last appended row and apply text wrapping to the "Details" (Col 4) and "url" (Col 5) cells.
+    sheet.getRange(sheet.getLastRow(), 4, 1, 2).setWrap(true);
   } catch (logErr) {
     // Suppress catastrophic failure. Telemetry errors should NEVER crash the main execution loop.
     console.error(`[_logToSheet_] Failed to log to sheet "${CONFIG.HISTORY_SHEET_NAME}": ${JSON.stringify(logErr)}`);
@@ -121,9 +128,10 @@ function _logToSheet_(type, name, details, url) {
  * @private
  * @param {string} functionName - The function name where the message was sent to console.
  * @param {string} errorMessage - The Pretty prepared error message.
+ * @param {string} errorObject - The e object caught by the handler, stringified.
  * @param {string} details - Secondary metadata or serialized context.
  */
-function _logTelemetryToSheet_(functionName, errorMessage, details) {
+function _logTelemetryToSheet_(functionName, errorMessage, errorObject, details) {
   try {
     // Open the master logging spreadsheet. (Hardcoded per requirement)
     const ss = SpreadsheetApp.openById(CONFIG.LOG_SHEET_ID);
@@ -135,13 +143,18 @@ function _logTelemetryToSheet_(functionName, errorMessage, details) {
     if (!sheet) {
       sheet = ss.insertSheet(CONFIG.TELEMETRY_SHEET_NAME);
       // Inject standard column headers for the newly created sheet.
-      sheet.appendRow(['Timestamp', 'Function Name', 'Error Message', 'Details']);
+      sheet.appendRow(['Timestamp', 'Function Name', 'Error Message', 'Error Object', 'Details']);
       // Freeze the top row to lock headers for visual scrolling.
       sheet.setFrozenRows(1);
+
+      // Initialize full-column wrapping for the data columns D & E to ensure manual entries wrap.
+      sheet.getRange("D:E").setWrap(true);
     }
 
     // Append the telemetry data array directly to the bottom of the active sheet.
-    sheet.appendRow([new Date(), functionName, errorMessage, details]);
+    sheet.appendRow([new Date(), functionName, errorMessage, errorObject, details]);
+    // Dynamically fetch the last appended row and apply text wrapping to the "Error Object" (Col 4) and "Details" (Col 5) cells.
+    sheet.getRange(sheet.getLastRow(), 4, 1, 2).setWrap(true);
   } catch (logErr) {
     // Suppress catastrophic failure. Telemetry errors should NEVER crash the main execution loop.
     console.error(`[_logTelemetryToSheet_] Failed to log to sheet "${CONFIG.TELEMETRY_SHEET_NAME}": ${JSON.stringify(logErr)}`);
