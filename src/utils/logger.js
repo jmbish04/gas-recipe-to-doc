@@ -225,6 +225,11 @@ function _logTelemetryToSheet_(functionName, errorMessage, errorObject, details,
       rowRange.setBackground("#f4cccc"); // Light Red 3
       rowRange.setFontColor("#990000"); // Dark Red text
     }
+    else {
+      // Reset to default to prevent carry-over from previous error rows
+      rowRange.setBackground(null); // Removes background color
+      rowRange.setFontColor(null);  // Resets text to default (black)
+    }
 
     // Apply text wrapping to the complex data fields (Cols 6 & 7: Error Object and Details)
     sheet.getRange(lastRow, 6, 1, 2).setWrap(true);
