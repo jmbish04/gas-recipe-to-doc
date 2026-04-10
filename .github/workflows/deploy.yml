@@ -67,8 +67,14 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      - name: Provide Authentication
-        run: echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
+      # - name: Provide Authentication
+      #   run: echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
+
+      - name: Provide Authentication (Python Setup)
+        # Utilizes the dedicated setup script for multi-path credential placement
+        run: python3 scripts/setup-clasp.py
+        env:
+          CLASPRC_JSON_RAW: ${{ secrets.CLASPRC_JSON }}        
 
       - name: Validate Configuration
         run: npm run validate
