@@ -252,16 +252,38 @@ function getSessionTelemetry(sessionId) {
       return JSON.stringify([]);
     }
 
-    // Extract a 2D array of all data starting from row 2
-    // Columns: Timestamp | Session ID | Function Name | Status | Error Message | Error Object | Details
-    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 7).getValues();
+    // Optimize retrieval by finding the specific session rows instead of reading the whole sheet
+    // Search column B (index 2) for the sessionId
+    const textFinder = sheet.getRange("B:B").createTextFinder(sessionId).matchEntireCell(true);
+    const matches = textFinder.findAll();
 
-    const rows = data
-      .filter(function(row) {
-        return row[0] && row[1] === sessionId;
-      })
-      .map(function(row) {
-        return {
+    if (!matches || matches.length === 0) {
+      return JSON.stringify([]);
+    }
+
+    // Limit to the last 50 matches to prevent payload bloat
+    const limitedMatches = matches.slice(-50);
+
+    // Instead of multiple single-row reads, find the contiguous block (if grouped chronologically)
+    // Or map over the limited matches. For sparse data, mapped getRange is okay, but
+    // it's safer to just fetch the block from min row to max row of the matches if they are close,
+    // but since we only have up to 50, let's just fetch them individually or as a block.
+
+    // Find min and max row in the matches to fetch one contiguous range to minimize API calls
+    const minRow = limitedMatches[0].getRow();
+    const maxRow = limitedMatches[limitedMatches.length - 1].getRow();
+    const numRows = maxRow - minRow + 1;
+
+    // Ensure we don't fetch more than necessary. If rows are widely separated, this might fetch extra,
+    // but typically session logs are grouped chronologically.
+    const dataRange = sheet.getRange(minRow, 1, numRows, 7).getValues();
+
+    const rows = [];
+    // Only process the rows that actually match the session ID
+    for (let i = 0; i < dataRange.length; i++) {
+      const row = dataRange[i];
+      if (row[0] && row[1] === sessionId) {
+        rows.push({
           timestamp: row[0] ? new Date(row[0]).toISOString() : '',
           sessionId: row[1] || '',
           functionName: row[2] || '',
@@ -269,13 +291,11 @@ function getSessionTelemetry(sessionId) {
           errorMessage: row[4] || '',
           errorObject: row[5] || '',
           details: row[6] || ''
-        };
-      })
-      // Take the last 50 entries and reverse to show newest first
-      .slice(-50)
-      .reverse();
+        });
+      }
+    }
 
-    return JSON.stringify(rows);
+    return JSON.stringify(rows.reverse());
   } catch (err) {
     console.error(`[getSessionTelemetry] Error fetching telemetry: ${err.message}`);
     return JSON.stringify([]);

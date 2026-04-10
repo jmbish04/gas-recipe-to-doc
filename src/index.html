@@ -535,7 +535,7 @@
 
 
     // ─── Telemetry Modal Component ────────────────────────────────────────────
-    function TelemetryModal({ isOpen, onClose, sessionId }) {
+    function TelemetryModal({ isOpen, onClose, sessionId, logSheetId }) {
       const [logs, setLogs] = useState([]);
       const [loading, setLoading] = useState(false);
       const [error, setError] = useState(null);
@@ -549,7 +549,7 @@
         setError(null);
         logClientTelemetry('TelemetryModal', 'Modal opened', { sessionId });
 
-        runScript('getSessionTelemetry')
+        runScript('getSessionTelemetry', sessionId)
           .then(res => {
             setLogs(JSON.parse(res));
           })
@@ -635,7 +635,7 @@
                           <span className="font-mono text-zinc-300 font-medium">{log.functionName}</span>
                         </div>
                         <span className="text-zinc-500 font-mono text-[10px] whitespace-nowrap">
-                          {log.timestamp ? new Date(log.timestamp).toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'} PST
+                          {new Date(log.timestamp).toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })} PST
                         </span>
                       </div>
                       {log.errorMessage && (
@@ -654,7 +654,7 @@
                 Use <kbd className="px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-sans">Ctrl+F</kbd> in the Google Sheet to find this specific Session ID since native URL filtering is unsupported.
               </p>
               <button
-                onClick={() => window.open('https://docs.google.com/spreadsheets/d/15OZdqdenNGVASN_EjygVuQkpL6ldO_Lk-hDon7aszw4/edit', '_blank')}
+                onClick={() => window.open(`https://docs.google.com/spreadsheets/d/${logSheetId || '15OZdqdenNGVASN_EjygVuQkpL6ldO_Lk-hDon7aszw4'}/edit`, '_blank')}
                 className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs font-medium rounded-lg transition-colors border border-zinc-700"
               >
                 Open in Google Sheets
@@ -674,6 +674,7 @@
       const [loading, setLoading] = useState(false);
       const [inputValue, setInputValue] = useState('');
       const [sessionId, setSessionId] = useState(null);
+      const [logSheetId, setLogSheetId] = useState(null);
       const [telemetryOpen, setTelemetryOpen] = useState(false);
 
       useEffect(() => {
@@ -681,6 +682,7 @@
           .then(res => {
             const data = JSON.parse(res);
             setSessionId(data.sessionId);
+            setLogSheetId(data.logSheetId);
             window.__currentSessionId = data.sessionId;
             console.log('[App] Session initialized:', data.sessionId);
           })
@@ -882,6 +884,7 @@ const sendMessage = useCallback(async () => {
             isOpen={telemetryOpen}
             onClose={() => setTelemetryOpen(false)}
             sessionId={sessionId}
+            logSheetId={logSheetId}
           />
         </div>
       );
