@@ -33,16 +33,27 @@ const SEARCH_API_KEY = scriptProps.getProperty('SEARCH_API_KEY');
 // Retrieve the Custom Search Engine ID (CX) required for Google Search targeting.
 const SEARCH_CX = scriptProps.getProperty('SEARCH_CX');
 
+// Session ID -- for traceability 
+const NEW_SESSION_ID = Utilities.getUuid();
+const NEW_SESSION_FOLDER_RESPONSE = _createSessionFolder_(NEW_SESSION_ID);
+
 // Define the core application configuration, locking down structural IDs and API endpoints.
 const CONFIG = {
   // Session ID -- for traceability 
-  SESSION_ID: Utilities.getUuid(), 
+  SESSION_ID: NEW_SESSION_ID,   
+  // Session Folder ID -- for traceability 
+  SESSION_FOLDER_ID: NEW_SESSION_FOLDER_RESPONSE.newSessionFolderId,   
+  // Session Folder Url -- for traceability 
+  SESSION_FOLDER_URL: NEW_SESSION_FOLDER_RESPONSE.newSessionFolderUrl,   
   // Google Drive template ID for the recipe document.
   TEMPLATE_ID: scriptProps.getProperty('TEMPLATE_ID'),
   // Target Google Drive folder ID where newly generated recipes will be stored.
   FOLDER_ID: scriptProps.getProperty('FOLDER_ID'),
+  // Target Google Drive folder ID where SESSION folders will be created for storing images, etc.
+  SESSION_PARENT_FOLDER_ID: scriptProps.getProperty('SESSION_PARENT_FOLDER_ID'),
   // Google Sheet ID used for system logging, auditing, and analytics.
   LOG_SHEET_ID: scriptProps.getProperty('LOG_SHEET_ID'),
+
 
   // Inject the retrieved Search API Key into the active configuration.
   SEARCH_API_KEY: SEARCH_API_KEY,
