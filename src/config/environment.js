@@ -11,7 +11,6 @@ const scriptProps = PropertiesService.getScriptProperties();
 // Safely extract the Cloudflare Account ID or fallback to a placeholder to prevent immediate catastrophic failure.
 const CF_ACCOUNT_ID = scriptProps.getProperty('CLOUDFLARE_ACCOUNT_ID');
 
-
 // Extract the Cloudflare Auth Token for direct API calls
 const CF_WRANGLER_API_TOKEN = scriptProps.getProperty('CLOUDFLARE_WRANGLER_API_TOKEN');
 
@@ -20,6 +19,9 @@ const CF_AIG_TOKEN = scriptProps.getProperty('CLOUDFLARE_AI_GATEWAY_TOKEN');
 
 // Extract the Cloudflare AI Gateway Slugname 
 const CF_AIG_SLUG = scriptProps.getProperty('CLOUDFLARE_AI_GATEWAY_SLUG') || 'default-gateway';
+
+// Dynamically construct the Cloudflare AI Gateway BaseUrl utilizing the account ID and AIG Slug.
+const CLOUDFLARE_AI_GATEWAY_BASE_URL = `https://gateway.ai.cloudflare.com/v1/${CF_ACCOUNT_ID}/${CF_AIG_SLUG}`
 
 // Extract the Cloudflare Browser Render API Token used for scraping recipe website content to markdown and to extract the prepared dish photo.
 const CF_BROWSER_RENDER_TOKEN = scriptProps.getProperty('CLOUDFLARE_BROWSER_RENDER_TOKEN');
@@ -63,7 +65,7 @@ const CONFIG = {
   // Map the Account ID to the internal key representation.
   CLOUDFLARE_ACCOUNT_ID: CF_ACCOUNT_ID,
   // Dynamically construct the Cloudflare AI Gateway BaseUrl utilizing the account ID and AIG Slug.
-  CLOUDFLARE_AI_GATEWAY_BASE_URL: `https://gateway.ai.cloudflare.com/v1/${CF_ACCOUNT_ID}/${CF_AIG_SLUG}`,  
+  CLOUDFLARE_AI_GATEWAY_BASE_URL: CLOUDFLARE_AI_GATEWAY_BASE_URL,
   // Dynamically construct the Cloudflare AI Gateway Universal Endpoint utilizing the baseUrl above.
   CLOUDFLARE_AI_GATEWAY_COMPAT_URL: `${CLOUDFLARE_AI_GATEWAY_BASE_URL}/compat/chat/completions`,
   // Dynamically construct the Cloudflare AI Gateway workers-ai image Endpoint utilizing the baseUrl above.
