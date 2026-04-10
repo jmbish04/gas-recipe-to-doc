@@ -22,6 +22,7 @@ function _createSessionFolder_(session_id){
       success: false,
       newSessionFolderId: null,
       newSessionFolderUrl: null,
+      newSessionFolder: null,
       errorMessage, 
       errors
     };
@@ -35,6 +36,7 @@ function _createSessionFolder_(session_id){
       success: true,
       newSessionFolderId: newSessionFolder.getId(),
       newSessionFolderUrl: newSessionFolder.getUrl(),
+      newSessionFolder,
       errorMessage: 'N/A', 
       errors
     };
@@ -46,6 +48,7 @@ function _createSessionFolder_(session_id){
       success: false,
       newSessionFolderId: null,
       newSessionFolderUrl: null,
+      newSessionFolder: null,
       errorMessage, 
       errors
     };
