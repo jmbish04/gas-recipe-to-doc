@@ -549,7 +549,7 @@
         setError(null);
         logClientTelemetry('TelemetryModal', 'Modal opened', { sessionId });
 
-        runScript('getSessionTelemetry', sessionId)
+        runScript('getSessionTelemetry')
           .then(res => {
             setLogs(JSON.parse(res));
           })
