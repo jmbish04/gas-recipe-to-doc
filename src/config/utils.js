@@ -29,7 +29,7 @@ function _createSessionFolder_(session_id){
   }
 
   try{
-    const sessionParentFolder = DriveApp.getFolder(sessionParentFolderId);
+    const sessionParentFolder = DriveApp.getFolderById(sessionParentFolderId);
     const newSessionFolder = sessionParentFolder.createFolder(session_id);
   
     return {
