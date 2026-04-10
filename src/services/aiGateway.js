@@ -211,9 +211,9 @@ function generateRecipeImageFlux2(prompt) {
   // UrlFetchApp automatically handles objects as multipart/form-data when passed to payload.
   const payload = {
     'prompt': prompt,
-    'steps': '25',
-    'width': '1024',
-    'height': '1024'
+    'steps': 25,
+    'width': 1024,
+    'height': 1024
   };
 
   const options = {
