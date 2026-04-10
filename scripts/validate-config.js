@@ -1,8 +1,6 @@
 /**
- * @fileoverview Static Configuration Validator for Google Apps Script
- * @description Scans the src/ directory for references to the CONFIG object and 
- * verifies they exist within src/config/environment.js. 
- * Prevents runtime 'undefined' errors during execution.
+ * @fileoverview Static CONFIG Validator for Google Apps Script
+ * @description Scans src/ for CONFIG.KEY patterns and verifies them against definitions in environment.js.
  */
 
 const fs = require('fs');
@@ -12,10 +10,6 @@ const SRC_DIR = path.join(__dirname, '../src');
 const CONFIG_PATH = path.join(SRC_DIR, 'config/environment.js');
 const SUPPORTED_EXTENSIONS = ['.js', '.gs', '.html'];
 
-/**
- * Extracts valid keys from the CONFIG object in environment.js
- * @returns {Set<string>} A set of valid configuration keys.
- */
 function getValidConfigKeys() {
   if (!fs.existsSync(CONFIG_PATH)) {
     console.error(`❌ CRITICAL: Configuration file not found at ${CONFIG_PATH}`);
@@ -23,8 +17,7 @@ function getValidConfigKeys() {
   }
 
   const content = fs.readFileSync(CONFIG_PATH, 'utf8');
-  
-  // Extract the object block for CONFIG
+  // Regex to find keys in the CONFIG object: KEY: value
   const configMatch = content.match(/const CONFIG = \{([\s\S]*?)\};/);
   if (!configMatch) {
     console.error('❌ CRITICAL: Could not find CONFIG object definition in environment.js');
@@ -44,9 +37,6 @@ function getValidConfigKeys() {
   return keys;
 }
 
-/**
- * Recursively scans files and checks for CONFIG.KEY usage
- */
 function validateDirectory(dir, validKeys, errors) {
   const files = fs.readdirSync(dir);
 
@@ -55,8 +45,7 @@ function validateDirectory(dir, validKeys, errors) {
     const stat = fs.statSync(fullPath);
 
     if (stat.isDirectory()) {
-      // Skip archive directory if it exists
-      if (file !== 'archive') {
+      if (file !== 'archive' && file !== 'node_modules') {
         validateDirectory(fullPath, validKeys, errors);
       }
     } else if (SUPPORTED_EXTENSIONS.includes(path.extname(file))) {
@@ -80,8 +69,7 @@ function validateDirectory(dir, validKeys, errors) {
 }
 
 function runValidation() {
-  console.log('🔍 Starting CONFIG validation check...');
-  
+  console.log('🔍 Starting CONFIG integrity check...');
   const validKeys = getValidConfigKeys();
   const errors = [];
 
@@ -92,10 +80,9 @@ function runValidation() {
     errors.forEach(err => {
       console.error(`   - [${err.file}:${err.line}] Undefined key: CONFIG.${err.key}`);
     });
-    console.error(`\nTotal errors: ${errors.length}. Please define these keys in src/config/environment.js.\n`);
     process.exit(1);
   } else {
-    console.log('✨ Validation successful! All CONFIG references are valid.\n');
+    console.log('✨ Validation successful! All configuration references are valid.\n');
   }
 }
 
