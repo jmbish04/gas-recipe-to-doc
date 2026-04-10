@@ -400,27 +400,36 @@ function uploadToCloudflareImages(rawImageBlob) {
 }
 
 /**
- * Standard implementation for injection remains (processAndInjectRecipeImage, etc.)
+ * Fetches a Cloudflare optimized image blob and injects it into a target Google Document.
+ * REFACTORED: Accepts Document object handle to prevent 'Document is closed' exceptions.
  */
-function processAndInjectRecipeImage(cloudflareImageUrl, docId) {
-  if (!cloudflareImageUrl || !docId) return;
+function processAndInjectRecipeImage(cloudflareImageUrl, doc) {
+  if (!cloudflareImageUrl || !doc) {
+    console.warn("[DocInjection] Missing required parameters.");
+    return;
+  }
+  
   try {
+    console.log(`[DocInjection] Fetching image: ${cloudflareImageUrl}`);
     const response = UrlFetchApp.fetch(cloudflareImageUrl, { muteHttpExceptions: true });
-    if (response.getResponseCode() !== 200) throw new Error("CF Fetch Failed");
+    if (response.getResponseCode() !== 200) throw new Error(`CF Fetch Failed: ${response.getResponseCode()}`);
 
-    const doc = DocumentApp.openById(docId);
     const body = doc.getBody();
     const placeholder = body.findText('{{IMAGE}}');
+    const imageBlob = response.getBlob();
     
     if (placeholder) {
-      injectAtExactPlaceholder(placeholder, response.getBlob(), 500);
+      console.log(`[DocInjection] Injecting at placeholder...`);
+      injectAtExactPlaceholder(placeholder, imageBlob, 500);
     } else {
-      appendAndScale(body, response.getBlob(), 500);
+      console.log(`[DocInjection] Placeholder not found, appending to end...`);
+      appendAndScale(body, imageBlob, 500);
     }
-    doc.saveAndClose();
+    // saveAndClose() REMOVED here. Caller in googleDocs.js now manages the resource lifecycle.
   } catch (error) {
     console.error(`[DocInjection] Failed: ${error.message}`);
     logTelemetry('processAndInjectRecipeImage', "[DocInjection] Failed:", error);
+    throw error; // Propagate to caller for document-level error handling
   }
 }
 
@@ -429,23 +438,25 @@ function injectAtExactPlaceholder(rangeElement, blob, targetWidth) {
   const startOffset = rangeElement.getStartOffset();
   const endOffset = rangeElement.getEndOffsetInclusive();
   const parent = textElement.getParent();
+  
+  // Insert relative to the text node's position in the paragraph
   const img = parent.asParagraph().insertInlineImage(parent.getChildIndex(textElement) + 1, blob);
+  
+  // Remove the marker text
   textElement.deleteText(startOffset, endOffset);
   scaleImage(img, targetWidth);
 }
 
-/**
- * Fallback: Appends image to the end of the document.
- */
 function appendAndScale(body, blob, targetWidth) {
-  scaleImage(body.appendImage(blob), targetWidth);
+  const img = body.appendImage(blob);
+  scaleImage(img, targetWidth);
 }
 
-/**
- * Maintains aspect ratio while scaling to target width.
- */
 function scaleImage(img, targetWidth) {
-  const ratio = targetWidth / (img.getWidth() || 1);
+  const originalWidth = img.getWidth() || 1;
+  const originalHeight = img.getHeight() || 1;
+  const ratio = targetWidth / originalWidth;
+  
   img.setWidth(targetWidth);
-  img.setHeight(Math.max(Math.round(img.getHeight() * ratio), 1));
+  img.setHeight(Math.max(Math.round(originalHeight * ratio), 1));
 }
