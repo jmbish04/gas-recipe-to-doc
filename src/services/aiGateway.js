@@ -173,3 +173,101 @@ function finalizeOutput(content) {
     return JSON.stringify({ type: "final", response: { message: content, proposals: [], doc_url: "" } });
   }
 }
+
+
+/**
+ * Generates an image using Cloudflare Workers AI FLUX model via AI Gateway.
+ * This is a discrete function independent of the main AI Gateway class logic.
+ * @param {string} prompt - The optimized recipe prompt for image generation.
+ * @returns {GoogleAppsScript.Base.Blob} The generated image as a Blob.
+ */
+function generateRecipeImageFlux2(prompt) {
+  const startTime = Date.now();
+  const fnName = 'generateRecipeImageFlux2';
+  console.log(`[${fnName}] START`);
+  logTelemetry(generateRecipeImageFlux2, 'Function started', { promptLength: prompt ? prompt.length : 0 });
+
+  if (!prompt) {
+    const errorMsg = `[${fnName}] Missing required parameter: prompt`;
+    console.error(errorMsg);
+    logTelemetry(generateRecipeImageFlux2, 'Missing prompt', { error: errorMsg });
+    throw new Error(errorMsg);
+  }
+
+  // 1. Resolve Model and Endpoint for AI Gateway
+  // Format: https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_slug}/workers-ai/{model_name}
+  const modelNameRaw = CONFIG.AI_MODEL_IMAGE_CREATOR || "@cf/black-forest-labs/flux-2-dev";
+  const workersAiModelName = modelNameRaw.replace('workers-ai/', '');
+  
+  // Derive the base Gateway URL by stripping the chat completion suffix
+  const endpoint = `${CONFIG.CLOUDFLARE_WORKERS_AI_URL}/${workersAiModelName}`;
+  const redactedEndpoint = typeof _redactUrl === 'function' ? _redactUrl(endpoint) : endpoint;
+
+  console.log(`[${fnName}] STEP: Configuration resolved (+${Date.now() - startTime}ms)`);
+  console.log(`[${fnName}] Calling API: ${redactedEndpoint} (+${Date.now() - startTime}ms)`);
+  logTelemetry(generateRecipeImageFlux2, 'Calling API', { url: redactedEndpoint });
+
+  // 2. Prepare Payload (Multipart/Form-Data logic per successful validation)
+  // UrlFetchApp automatically handles objects as multipart/form-data when passed to payload.
+  const payload = {
+    'prompt': prompt,
+    'steps': '25',
+    'width': '1024',
+    'height': '1024'
+  };
+
+  const options = {
+    method: "post",
+    contentType: "application/json",
+    headers: {
+      "Authorization": `Bearer ${CONFIG.CLOUDFLARE_AI_GATEWAY_TOKEN}`
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(endpoint, options);
+    const statusCode = response.getResponseCode();
+    const resText = response.getContentText();
+
+    console.log(`[${fnName}] STEP: API response received with code ${statusCode} (+${Date.now() - startTime}ms)`);
+
+    if (statusCode !== 200) {
+      const errorMsg = `[${fnName}] Cloudflare AI Error (${statusCode}): ${resText}`;
+      console.error(errorMsg);
+      logTelemetry(generateRecipeImageFlux2, 'API Error', { statusCode, response: resText });
+      throw new Error(errorMsg);
+    }
+
+    const data = JSON.parse(resText);
+    
+    // Workers AI image models return a base64 string in data.result.image when called via this endpoint
+    if (!data.success || !data.result || !data.result.image) {
+      const errorMsg = `[${fnName}] Invalid response structure or generation failed.`;
+      console.error(errorMsg, data);
+      logTelemetry(generateRecipeImageFlux2, 'Invalid JSON structure', data);
+      throw new Error(errorMsg);
+    }
+
+    console.log(`[${fnName}] STEP: Image data received, decoding base64 (+${Date.now() - startTime}ms)`);
+
+    // 3. Process Result into Blob
+    const bytes = Utilities.base64Decode(data.result.image);
+    const imageBlob = Utilities.newBlob(bytes, 'image/jpeg', `recipe_flux_${Date.now()}.jpg`);
+
+    const elapsed = Date.now() - startTime;
+    console.log(`[${fnName}] SUCCESS: Image generated successfully in ${elapsed}ms`);
+    logTelemetry(generateRecipeImageFlux2, 'Function completed successfully', { 
+      elapsedMs: elapsed,
+      blobSize: imageBlob.getBytes().length 
+    });
+    
+    return imageBlob;
+
+  } catch (error) {
+    console.error(`[${fnName}] Error:`, error);
+    logTelemetry(generateRecipeImageFlux2, 'Error generating image', error);
+    throw error;
+  }
+}
