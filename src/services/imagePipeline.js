@@ -195,6 +195,105 @@ function enrichRecipesWithImages(recipes) {
 }
 
 /**
+ * Uploads an image blob to Cloudflare and backs up both raw and optimized versions to Google Drive.
+ * @param {GoogleAppsScript.Base.Blob} rawImageBlob - The original image data.
+ * @returns {string} The persistent Cloudflare delivery URL.
+ */
+function uploadToCloudflareImages(rawImageBlob) {
+  const startTime = Date.now();
+  const fnName = "uploadToCloudflareImages";
+  console.log(`[${fnName}] START`);
+  
+  let rawDriveUrl = "";
+  let optimizedDriveUrl = "";
+  let cloudflareImageUrl = "";
+
+  // 1. Save Raw Image to Google Drive
+  try {
+    const sessionFolder = DriveApp.getFolderById(CONFIG.SESSION_FOLDER_ID);
+    rawImageBlob.setName(`RAW_${rawImageBlob.getName() || "image.jpg"}`);
+    const rawFile = sessionFolder.createFile(rawImageBlob);
+    rawDriveUrl = rawFile.getUrl();
+    logTelemetry(fnName,`STEP: Raw image saved to Drive: ${rawDriveUrl}`);
+  } catch (driveErr) {
+    console.warn(`[${fnName}] WARNING: Failed to save RAW image to Drive: ${driveErr.message}`);
+    logTelemetry(fnName, "Drive Save Failed (Raw)", driveErr);
+  }
+
+  // 2. Upload to Cloudflare Images
+  const cfEndpoint = CONFIG.CLOUDFLARE_IMAGES_URL;
+  const apiToken = CONFIG.CLOUDFLARE_IMAGES_STREAM_TOKEN;
+
+  const cfOptions = {
+    method: "post",
+    headers: { "Authorization": `Bearer ${apiToken}` },
+    payload: { file: rawImageBlob, requireSignedURLs: "false" },
+    muteHttpExceptions: true
+  };
+
+  try {
+    console.log(`[${fnName}] STEP: Calling Cloudflare Images API (+${Date.now() - startTime}ms)`);
+    logTelemetry(fnName,`STEP: Calling Cloudflare Images API (+${Date.now() - startTime}ms)`);
+    const cfResponse = UrlFetchApp.fetch(cfEndpoint, cfOptions);
+    
+    if (cfResponse.getResponseCode() !== 200) {
+      throw new Error(`CF API Error (${cfResponse.getResponseCode()}): ${cfResponse.getContentText()}`);
+    }
+
+    const cfData = JSON.parse(cfResponse.getContentText());
+    if (!cfData.success){
+      const errorMessage = `Cloudflare upload failed: ${JSON.stringify(cfData)}`;
+      logTelemetry(fnName, errorMessage, cfData);
+      throw new Error(`[${fnName}] ${errorMessage}`);
+    }
+
+    // Use the /public variant as the standard "pre-custom-optimization" Cloudflare URL
+    cloudflareImageUrl = cfData.result.variants.find(v => v.endsWith("/public")) || cfData.result.variants[0];
+    logTelemetry(fnName, `STEP: Uploaded to Cloudflare: ${cloudflareImageUrl} (+${Date.now() - startTime}ms)`);
+
+    // 3. Fetch Optimized Image from Cloudflare and Save to Google Drive
+    try {
+      // We fetch the image back from Cloudflare to get the "optimized" binary
+      console.log(`[${fnName}] STEP: Fetching optimized blob from Cloudflare...`);
+      logTelemetry(fnName, `STEP: Fetching optimized blob from Cloudflare...`);
+      const optimizedResponse = UrlFetchApp.fetch(cloudflareImageUrl, { muteHttpExceptions: true });
+      
+      if (optimizedResponse.getResponseCode() === 200) {
+        const optimizedBlob = optimizedResponse.getBlob().setName(`OPTIMIZED_${rawImageBlob.getName() || "image.jpg"}`);
+        const sessionFolder = DriveApp.getFolderById(CONFIG.SESSION_FOLDER_ID);
+        const optFile = sessionFolder.createFile(optimizedBlob);
+        optimizedDriveUrl = optFile.getUrl();
+        console.log(`[${fnName}] STEP: Optimized image saved to Drive: ${optimizedDriveUrl}`);
+        logTelemetry(fnName, `STEP: Optimized image saved to Drive: ${optimizedDriveUrl}`);
+      }
+    } catch (optDriveErr) {
+      console.warn(`[${fnName}] WARNING: Failed to save OPTIMIZED image to Drive: ${optDriveErr.message}`);
+      logTelemetry(fnName, "Drive Save Failed (Optimized)", optDriveErr);
+    }
+
+    // 4. Comprehensive Telemetry Log
+    const telemetryData = {
+      elapsedMs: Date.now() - startTime,
+      cloudflareUrl: cloudflareImageUrl,
+      rawDriveUrl: rawDriveUrl,
+      optimizedDriveUrl: optimizedDriveUrl,
+      sessionFolderUrl: CONFIG.SESSION_FOLDER_URL, // Requirement 3: Log folder URL
+      blobSize: rawImageBlob.getBytes().length
+    };
+
+    console.log(`[${fnName}] SUCCESS: Image processing complete (+${Date.now() - startTime}ms)`);
+    logTelemetry(fnName, "Image Upload Cycle Complete", telemetryData);
+    
+    return cloudflareImageUrl;
+
+  } catch (error) {
+    console.error(`[${fnName}] CRITICAL ERROR: ${error.message}`);
+    logTelemetry(fnName, "Cloudflare Upload Failed", error);
+    throw error;
+  }
+}
+
+/**
  * Standard implementation for injection remains (processAndInjectRecipeImage, etc.)
  */
 function processAndInjectRecipeImage(cloudflareImageUrl, docId) {
@@ -213,8 +312,9 @@ function processAndInjectRecipeImage(cloudflareImageUrl, docId) {
       appendAndScale(body, response.getBlob(), 500);
     }
     doc.saveAndClose();
-  } catch (e) {
-    console.error(`[DocInjection] Failed: ${e.message}`);
+  } catch (error) {
+    console.error(`[DocInjection] Failed: ${error.message}`);
+    logTelemetry('processAndInjectRecipeImage', "[DocInjection] Failed:", error);
   }
 }
 
