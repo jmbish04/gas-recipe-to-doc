@@ -222,7 +222,7 @@ function generateRecipeImageFlux2(prompt) {
     headers: {
       "Authorization": `Bearer ${CONFIG.CLOUDFLARE_AI_GATEWAY_TOKEN}`
     },
-    payload: JSON.stringify(payload),
+    payload: payload,
     muteHttpExceptions: true
   };
 
