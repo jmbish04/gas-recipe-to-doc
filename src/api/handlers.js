@@ -13,7 +13,7 @@
 function doGet(e) {
   try {
     // Attempt to load and evaluate the template
-    return HtmlService.createTemplateFromFile('index')
+    return HtmlService.createTemplateFromFile('index_test')
       .evaluate()
       .setTitle('Recipe Assistant')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
