@@ -1,0 +1,6 @@
+{
+  // "scriptId": "1ojYaRCfnLS91qRLNM9Byl-_7NtYpX9SYv_X4ZkjWjO3jM3HjgM7dr0kH", // gmail
+  "scriptId": "1YfP3Cc3pVTaQFkLfCMqimvTeyxy2OHmHKnf3aymxbdIEcJ9WbPIK7Fok", // 126colby
+  "rootDir": "dist/",
+  "watchMode": false
+}
