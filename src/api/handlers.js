@@ -11,15 +11,25 @@
  * @returns {HtmlOutput} The evaluated HTML template for the frontend interface.
  */
 function doGet(e) {
-  // Create an HTML template from the 'index' file and evaluate it to inject backend variables.
-  return HtmlService.createTemplateFromFile('index')
-    .evaluate()
-    // Set the browser tab title for the application.
-    .setTitle('Recipe Assistant')
-    // Allow the web app to be embedded in external iframes if necessary (ALLOWALL).
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-    // Inject a responsive viewport meta tag to ensure mobile compatibility.
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  try {
+    // Attempt to load and evaluate the template
+    return HtmlService.createTemplateFromFile('index')
+      .evaluate()
+      .setTitle('Recipe Assistant')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+      
+  } catch (err) {
+    // Log the error for server-side visibility
+    console.error('CRITICAL: Failed to serve index.html.', err);
+    logTelemetry('doGet', 'CRITICAL: Failed to serve index.html.', err);
+    
+    // Return the pretty error page matching the app's styling
+    return HtmlService.createHtmlOutput(_getIndexErrorPage_(err))
+      .setTitle('System Error - Recipe Assistant')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
 }
 
 /**
@@ -78,4 +88,71 @@ function executeTool(toolName, argsStr) {
   } catch (err) {
     return "Error executing tool: " + err.message;
   }
+}
+
+
+/**
+ * Generates an inline HTML error page that matches the Shadcn/Dark theme.
+ * @param {Error} error The error object caught in doGet.
+ * @return {string} The full HTML content for the error page.
+ */
+function _getIndexErrorPage_(error) {
+  const errorMessage = error.message || 'The application resource "index" could not be found or loaded.';
+  
+  return `<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            background: '#09090b',
+            foreground: '#fafafa',
+            card: { DEFAULT: '#18181b', foreground: '#fafafa' },
+            muted: { DEFAULT: '#27272a', foreground: '#a1a1aa' },
+            accent: { DEFAULT: '#27272a', foreground: '#fafafa' }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body { background-color: #09090b; color: #fafafa; font-family: ui-sans-serif, system-ui, sans-serif; }
+    .error-card { border: 1px solid #27272a; }
+  </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+  <div class="max-w-md w-full error-card bg-[#18181b] rounded-xl p-8 shadow-2xl space-y-6 text-center">
+    <div class="mx-auto w-12 h-12 rounded-full bg-red-900/20 flex items-center justify-center border border-red-900/30">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+    </div>
+    
+    <div class="space-y-2">
+      <h1 class="text-xl font-bold tracking-tight text-zinc-100">Application Error</h1>
+      <p class="text-sm text-zinc-400 leading-relaxed">
+        We encountered a problem while trying to load the <strong>Recipe Assistant</strong>.
+      </p>
+    </div>
+
+    <div class="bg-zinc-950 rounded-lg p-4 border border-zinc-800 text-left">
+      <p class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Error Details</p>
+      <code class="text-xs text-red-400 break-words font-mono">${errorMessage}</code>
+    </div>
+
+    <div class="pt-4">
+      <button onclick="window.location.reload()" class="w-full px-4 py-2.5 rounded-lg bg-zinc-100 text-zinc-900 text-xs font-bold uppercase tracking-widest hover:bg-zinc-200 transition-colors">
+        Try to Reload
+      </button>
+    </div>
+    
+    <p class="text-[10px] text-zinc-600">Please verify that the 'index.html' file exists in your project.</p>
+  </div>
+</body>
+</html>`;
 }
