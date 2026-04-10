@@ -83,7 +83,7 @@ const CONFIG = {
   // Map the Browser Render API Token to the internal key representation.
   CLOUDFLARE_BROWSER_RENDER_TOKEN: CF_BROWSER_RENDER_TOKEN,
   // Map the Images API Token to the internal key representation.
-  CLOUDFLARE_IMAGES_STREAM_TOKEN: CF_BROWSER_RENDER_TOKEN,
+  CLOUDFLARE_IMAGES_STREAM_TOKEN: CF_IMAGES_API_TOKEN,
 
   // Define the designated Agent LLM. Using the OpenAI interface structure for guaranteed tool calling compliance.
   AI_MODEL: scriptProps.getProperty('AI_MODEL_NAME') || 'google-ai-studio/gemini-3-flash-preview',
