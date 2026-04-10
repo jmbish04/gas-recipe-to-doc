@@ -4,10 +4,88 @@
  * @description Handles extracting (Scrape), finding (Search), or creating (AI) high-end recipe visuals.
  */
 
+
+/**
+ * Uses Cloudflare Browser Rendering AI (/json) to extract the primary recipe image,
+ * bypassing manual DOM heuristics in favor of LLM-driven structured extraction.
+ */
+function scrapeImagesFromUrl(targetUrl) {
+  const startTime = Date.now();
+  const fn = "scrapeImagesFromUrl";
+  console.log(`[${fn}] START: ${targetUrl}`);
+  logTelemetry(fn, "Function Started", { targetUrl });
+
+  const apiToken = CONFIG.CLOUDFLARE_BROWSER_RENDER_TOKEN;
+  // Endpoint shifted from /scrape to /json to leverage Workers AI structured extraction
+  const endpoint = `${CONFIG.CLOUDFLARE_BROWSER_RENDER_URL}/json`;
+
+  const payload = {
+    url: targetUrl,
+    prompt: "Identify the single main, high-resolution food photograph representing the finished recipe on this page. Explicitly exclude site logos, author avatars, social media icons, sidebar widgets, and low-resolution thumbnails. Return the absolute URL of this best recipe image.",
+    response_format: {
+      type: "json_schema",
+      schema: {
+        type: "object",
+        properties: {
+          imageUrl: {
+            type: "string",
+            description: "The absolute URL to the main recipe image."
+          }
+        },
+        required: ["imageUrl"]
+      }
+    },
+    gotoOptions: {
+      // Ensure SPA/JavaScript heavy recipe sites finish loading dynamic images before extraction
+      waitUntil: "networkidle2"
+    }
+  };
+
+  console.log(`[${fn}] Browser Render /json payload: ${payload}`);
+  logTelemetry(fn, `Browser Render /json payload`, payload);
+  
+
+  try {
+    const response = UrlFetchApp.fetch(endpoint, {
+      method: "post",
+      contentType: "application/json",
+      headers: { "Authorization": `Bearer ${apiToken}` },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+
+    const elapsed = Date.now() - startTime;
+    console.log(`[${fn}] STEP: Browser Render AI response received (+${elapsed}ms)`);
+
+    const data = JSON.parse(response.getContentText());
+    if (!data.success) throw new Error(`Browser Rendering /json failed: ${JSON.stringify(data)}`);
+
+    // The /json endpoint maps the JSON schema directly into data.result
+    const extractedUrl = data.result?.imageUrl;
+    let imageUrls = [];
+
+    if (extractedUrl && extractedUrl.startsWith('http')) {
+      imageUrls.push(extractedUrl);
+    }
+
+    console.log(`[${fn}] SUCCESS: Extracted AI image URL (+${Date.now() - startTime}ms)`);
+    logTelemetry(fn, "Function Completed", { count: imageUrls.length, extractedUrl, elapsed });
+    
+    return imageUrls;
+
+  } catch (error) {
+    console.error(`[${fn}] FAILED: ${error.message}`);
+    logTelemetry(fn, "Scraping Error", error);
+    return [];
+  }
+}
+
+
+
 /**
  * Scrapes a URL and extracts images, excluding logos, ads, and small icons.
  */
-function scrapeImagesFromUrl(targetUrl) {
+function scrapeImagesFromUrlLinks(targetUrl) {
   const startTime = Date.now();
   const fn = "scrapeImagesFromUrl";
   console.log(`[${fn}] START: ${targetUrl}`);
@@ -42,14 +120,16 @@ function scrapeImagesFromUrl(targetUrl) {
     if (imgScrapeData && imgScrapeData.results) {
       // --- HEURISTIC FILTERING ---
       // Exclude obvious logos, ads, avatars, and icons based on URL patterns
-      const blacklist = [/logo/i, /icon/i, /avatar/i, /ad-/i, /banner/i, /sprite/i, /loading/i, /\.gif/i, / Swasthis_Recipes_Logo/i];
-      
+      const blocklist = [
+        /logo/i, /icon/i, /avatar/i, /ad-/i, /banner/i, /sprite/i, /loading/i, /\.gif/i, /Swasthis_Recipes_Logo/i,
+        /social/i, /header/i, /button/i, /widget/i, /theme/i, /about/i, /search/i, /96x96/i, /\-\d+x\d+\./i
+      ];
       imageUrls = imgScrapeData.results
         .map(el => (el.attributes.find(a => a.name === "src") || {}).value)
         .filter(src => {
           if (!src || !src.startsWith('http')) return false;
-          // Check if URL matches any blacklisted keywords
-          const isJunk = blacklist.some(regex => regex.test(src));
+          // Check if URL matches any blocklist keywords
+          const isJunk = blocklist.some(regex => regex.test(src));
           return !isJunk;
         });
     }
