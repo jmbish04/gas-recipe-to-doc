@@ -77,7 +77,7 @@ function executeAgentStep(messages, isFallback = false) {
     max_completion_tokens: 4096
   };
 
-  const endpointUrl = CONFIG.CLOUDFLARE_AI_GATEWAY_URL;
+  const endpointUrl = CONFIG.CLOUDFLARE_AI_GATEWAY_COMPAT_URL;
   // Note: _redactUrl helper assumed to be in global scope from utility upgrades
   console.log(`[executeAgentStep] STEP: Calling API: ${typeof _redactUrl === 'function' ? _redactUrl(endpointUrl) : endpointUrl} (+${Date.now() - startTime}ms)`);
   
