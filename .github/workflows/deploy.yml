@@ -1,0 +1,78 @@
+name: Deploy to Apps Script
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:      
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Archive .txt files
+        run: |
+          # Ensure the base archive directory exists
+          mkdir -p src/archive
+          
+          # Find all .txt files in src/ (excluding the archive directory itself to prevent loops)
+          find src -type f -name "*.txt" -not -path "src/archive/*" | while read -r file; do
+            # Extract relative path by stripping the leading 'src/'
+            rel_path="${file#src/}"
+            
+            # Get the folder name and the file name
+            dir_name=$(dirname "$rel_path")
+            base_name=$(basename "$rel_path")
+            
+            # Construct the target directory path
+            target_dir="src/archive/$dir_name"
+            
+            # Create the specific target subfolder if it doesn't exist
+            mkdir -p "$target_dir"
+            
+            # Move the file preserving its original name
+            mv "$file" "$target_dir/$base_name"
+            echo "Archived: $file -> $target_dir/$base_name"
+          done
+
+      - name: Commit and Push Archived Files
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Stage the src directory
+          git add src/
+          
+          # Only commit and push if there are actual changes
+          if ! git diff --staged --quiet; then
+            # Use [skip ci] so this automated commit doesn't trigger another deployment run
+            git commit -m "chore: archive .txt files [skip ci]"
+            git push
+            echo "Successfully committed and pushed archived files."
+          else
+            echo "No new .txt files needed archiving."
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Provide Authentication
+        run: echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
+
+      - name: Validate Configuration
+        run: npm run validate
+
+      - name: Execute Production Deployment
+        # This script runs build.js, npm run push, and updates PROD_WEB_APP
+        run: npm run deploy
