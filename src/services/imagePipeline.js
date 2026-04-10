@@ -468,3 +468,42 @@ function scaleImage(img, targetWidth) {
   img.setHeight(Math.max(Math.round(originalHeight * ratio), 1));
   console.log(`[scaleImage] SUCCESS: New size ${img.getWidth()}x${img.getHeight()} (+${Date.now() - startTime}ms)`);
 }
+
+
+/**
+ * Orchestrates generating an image from recipe text using FLUX.2, 
+ * uploads it to Cloudflare Images, and returns the persistent delivery URL.
+ * * @param {string} recipeText - The raw recipe text to generate an image for.
+ * @returns {string} The Cloudflare Images delivery URL.
+ */
+function createAndUploadRecipeImage(recipeText) {
+  const startTime = Date.now();
+  console.log(`[createAndUploadRecipeImage] START`);
+  logTelemetry(createAndUploadRecipeImage, 'Function started', { functionName: 'createAndUploadRecipeImage', recipeText, recipeTextLength: recipeText?.length });
+
+  // 1. Wrap the raw text in photographic direction to optimize the VLM rendering
+  const optimizedPrompt = ```
+    Macro food photography, highly detailed, photorealistic. 
+    A beautifully plated dish prepared exactly according to this recipe: "${recipeText}". 
+    Studio lighting, shallow depth of field, 4k resolution, hyper-realistic food styling, appetizing, cinematic lighting.
+  ```;
+
+  try {
+    // 2. Stream generation via FLUX.2 
+    const imageBlob = generateRecipeImageFlux2(optimizedPrompt);
+
+    // 3. Pass the generated blob directly to your existing Cloudflare Images pipeline
+    console.log(`[createAndUploadRecipeImage] STEP: Uploading generated blob to Cloudflare Images (+${Date.now() - startTime}ms)`);
+    const cfImageUrl = uploadToCloudflareImages(imageBlob);
+
+    console.log(`[createAndUploadRecipeImage] SUCCESS: End-to-end generation and upload complete: ${cfImageUrl} (+${Date.now() - startTime}ms)`);
+    logTelemetry(createAndUploadRecipeImage, 'Function completed successfully', { url: cfImageUrl, elapsedMs: Date.now() - startTime });
+
+    return cfImageUrl;
+
+  } catch (error) {
+    console.error("[createAndUploadRecipeImage] Orchestration Error:", error);
+    logTelemetry(createAndUploadRecipeImage, 'Orchestration Error', error);
+    throw error;
+  }
+}
