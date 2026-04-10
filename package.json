@@ -4,7 +4,8 @@
   "description": "Google Apps Script project managed with clasp",
   "scripts": {
     "lint": "eslint src/**/*.ts",
-    "push": "npx clasp push -f",
+    "build": "node scripts/build.js",
+    "push": "npm run build && npx clasp push -f",
     "deploy": "npm run push && npx clasp deploy -d \"${GITHUB_SHA:-local}\""
   },
   "devDependencies": {
