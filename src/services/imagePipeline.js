@@ -86,6 +86,7 @@ function getRecipeImageUrl(recipeName) {
 
     if (!data.items || data.items.length === 0) {
       console.warn(`[${fn}] No cinematic results. Falling back to broad search.`);
+      logTelemetry(fn, "No cinematic results. Falling back to broad search.", data);
       return null;
     }
 
