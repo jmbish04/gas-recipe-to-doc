@@ -167,7 +167,7 @@ function initializeSession() {
   const folderResponse = _createSessionFolder_(sessionId);
   return JSON.stringify({
     sessionId: sessionId,
-    folderId: folderResponse.newSessionFolderId,
-    folderUrl: folderResponse.newSessionFolderUrl
+    folderId: folderResponse ? folderResponse.newSessionFolderId : null,
+    folderUrl: folderResponse ? folderResponse.newSessionFolderUrl : null
   });
 }
