@@ -255,7 +255,7 @@ function uploadToCloudflareImages(rawImageBlob) {
     const cfResponse = UrlFetchApp.fetch(cfEndpoint, cfOptions);
     
     if (cfResponse.getResponseCode() !== 200) {
-      logTelemetry(fnName,`ERROR: Cloudflare Images API Error (${cfResponse.getResponseCode()}): ${cfResponse.getContentText()`);
+      logTelemetry(fnName,`ERROR: Cloudflare Images API Error (${cfResponse.getResponseCode()}): ${cfResponse.getContentText()}`);
       throw new Error(`[${fnName}] Cloudflare Images API Error (${cfResponse.getResponseCode()}): ${cfResponse.getContentText()}`);
     }
 
