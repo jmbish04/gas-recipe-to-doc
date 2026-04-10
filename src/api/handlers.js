@@ -76,7 +76,8 @@ function doPost(e) {
  * @param {string} argsStr - The JSON stringified arguments for the tool.
  * @returns {string} The result of the tool execution as a string.
  */
-function executeTool(toolName, argsStr) {
+function executeTool(toolName, argsStr, clientSessionId) {
+  if (clientSessionId) CONFIG.SESSION_ID = clientSessionId;
   try {
     const args = JSON.parse(argsStr);
     const dispatcher = TOOL_DISPATCHER[toolName];
@@ -155,4 +156,19 @@ function _getIndexErrorPage_(error) {
   </div>
 </body>
 </html>`;
+}
+
+/**
+ * Initializes a new session initiated by the frontend.
+ * @returns {string} JSON containing the new session ID and folder details.
+ */
+function initializeSession() {
+  const sessionId = Utilities.getUuid();
+  const folderResponse = _createSessionFolder_(sessionId);
+  return JSON.stringify({
+    sessionId: sessionId,
+    folderId: folderResponse.newSessionFolderId,
+    folderUrl: folderResponse.newSessionFolderUrl,
+    logSheetId: CONFIG.LOG_SHEET_ID
+  });
 }

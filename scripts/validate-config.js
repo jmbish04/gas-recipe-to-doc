@@ -18,7 +18,7 @@ function getValidConfigKeys() {
 
   const content = fs.readFileSync(CONFIG_PATH, 'utf8');
   // Regex to find keys in the CONFIG object: KEY: value
-  const configMatch = content.match(/const CONFIG = \{([\s\S]*?)\};/);
+  const configMatch = content.match(/(?:const|let) CONFIG = \{([\s\S]*?)\};/);
   if (!configMatch) {
     console.error('❌ CRITICAL: Could not find CONFIG object definition in environment.js');
     process.exit(1);

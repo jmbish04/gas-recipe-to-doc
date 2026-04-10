@@ -74,7 +74,8 @@ function logTelemetry(functionName, errorMessage, errorObject) {
  * Retrieves the paginated history of search and export events for the frontend UI.
  * @returns {string} A JSON serialized array of normalized history objects, sorted newest-first.
  */
-function getHistory() {
+function getHistory(clientSessionId) {
+  if (clientSessionId) CONFIG.SESSION_ID = clientSessionId;
   // Open the centralized logging spreadsheet via the Drive ID. (Hardcoded per requirement)
   const ss = SpreadsheetApp.openById(CONFIG.LOG_SHEET_ID);
 
@@ -237,5 +238,71 @@ function _logTelemetryToSheet_(functionName, errorMessage, errorObject, details,
   } catch (logErr) {
     // Suppress catastrophic failure to prevent telemetry loops from crashing the core logic.
     console.error(`[_logTelemetryToSheet_] Critical logging failure: ${logErr.message}`);
+  }
+}
+
+/**
+ * Retrieves the telemetry log specific to a given session ID.
+ * @param {string} sessionId - The ID of the session to filter by.
+ * @returns {string} A JSON serialized array of telemetry objects.
+ */
+function getSessionTelemetry(sessionId) {
+  if (sessionId) CONFIG.SESSION_ID = sessionId;
+
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.LOG_SHEET_ID);
+    const sheet = ss.getSheetByName(CONFIG.TELEMETRY_SHEET_NAME);
+
+    if (!sheet || sheet.getLastRow() < 2) {
+      return JSON.stringify([]);
+    }
+
+    // Optimize retrieval by finding the specific session rows instead of reading the whole sheet
+    // Search column B (index 2) for the sessionId
+    const textFinder = sheet.getRange("B:B").createTextFinder(sessionId).matchEntireCell(true);
+    const matches = textFinder.findAll();
+
+    if (!matches || matches.length === 0) {
+      return JSON.stringify([]);
+    }
+
+    // Limit to the last 50 matches to prevent payload bloat
+    const limitedMatches = matches.slice(-50);
+
+    // Instead of multiple single-row reads, find the contiguous block (if grouped chronologically)
+    // Or map over the limited matches. For sparse data, mapped getRange is okay, but
+    // it's safer to just fetch the block from min row to max row of the matches if they are close,
+    // but since we only have up to 50, let's just fetch them individually or as a block.
+
+    // Find min and max row in the matches to fetch one contiguous range to minimize API calls
+    const minRow = limitedMatches[0].getRow();
+    const maxRow = limitedMatches[limitedMatches.length - 1].getRow();
+    const numRows = maxRow - minRow + 1;
+
+    // Ensure we don't fetch more than necessary. If rows are widely separated, this might fetch extra,
+    // but typically session logs are grouped chronologically.
+    const dataRange = sheet.getRange(minRow, 1, numRows, 7).getValues();
+
+    const rows = [];
+    // Only process the rows that actually match the session ID
+    for (let i = 0; i < dataRange.length; i++) {
+      const row = dataRange[i];
+      if (row[0] && row[1] === sessionId) {
+        rows.push({
+          timestamp: row[0] ? new Date(row[0]).toISOString() : '',
+          sessionId: row[1] || '',
+          functionName: row[2] || '',
+          status: row[3] || '',
+          errorMessage: row[4] || '',
+          errorObject: row[5] || '',
+          details: row[6] || ''
+        });
+      }
+    }
+
+    return JSON.stringify(rows.reverse());
+  } catch (err) {
+    console.error(`[getSessionTelemetry] Error fetching telemetry: ${err.message}`);
+    return JSON.stringify([]);
   }
 }

@@ -4,7 +4,8 @@
  * @description Orchestrates the creation and formatting of recipe documents.
  */
 
-function createRecipeDoc(recipe) {
+function createRecipeDoc(recipe, clientSessionId) {
+  if (clientSessionId) CONFIG.SESSION_ID = clientSessionId;
   const startTime = Date.now();
   console.log(`[createRecipeDoc] START`);
   logTelemetry(createRecipeDoc, 'Function started', { title: recipe.title });

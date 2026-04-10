@@ -1,5 +1,21 @@
 {
   "scriptId": "1dPjr86JPydEW5rtwzCS-eE5-0wd4gcmXmSKasTf5mo0t5wrH3u0mAkfX",
   "rootDir": "dist/",
-  "watchMode": false
+  "watchMode": false,
+  "fileOrder": [
+    "appsscript.json",
+    "001_config_environment.js",
+    "002_config_utils.js",
+    "003_utils_shared.js",
+    "004_utils_logger.js",
+    "005_services_agentConfig.js",
+    "006_services_aiGateway.js",
+    "007_services_cloudflareRendering.js",
+    "008_services_googleDocs.js",
+    "009_services_googleSearch.js",
+    "010_services_imagePipeline.js",
+    "011_api_handlers.js",
+    "012_index_v2.html",
+    "index.html"
+  ]
 }
