@@ -155,7 +155,9 @@ function createAndUploadRecipeImage(recipeName) {
  */
 function enrichRecipesWithImages(recipes) {
   const startTime = Date.now();
-  console.log(`[enrichRecipesWithImages] START: Processing ${recipes.length} recipes.`);
+  const fnName = 'enrichRecipesWithImages';
+  console.log(`[${fnName}] START: Processing ${recipes.length} recipes.`);
+  logTelemetry(fnName, 'START: Processing ${recipes.length} recipes.', recipes);
 
   return recipes.map((recipe, idx) => {
     let finalUrl = "";
@@ -164,28 +166,37 @@ function enrichRecipesWithImages(recipes) {
     const scraped = scrapeImagesFromUrl(recipe.sourceUrl);
     if (scraped.length > 0) {
       console.log(`[Enrich] Recipe ${idx+1}: Using scraped visual.`);
+      logTelemetry(fnName, `[Enrich LEVEL 1] Recipe ${idx+1}: Using scraped visual.`, scraped);
       finalUrl = scraped[0];
     }
 
     // LEVEL 2: Cinematic Google Search Fallback
     if (!finalUrl) {
       console.log(`[Enrich] Recipe ${idx+1}: Scrape failed. Triggering Cinematic Search.`);
+      logTelemetry(fnName, `[Enrich LEVEL 2] Recipe ${idx+1}: Scrape failed. Triggering Cinematic Search.`, scraped);
       finalUrl = getRecipeImageUrl(recipe.title);
     }
 
     // LEVEL 3: Workers AI Generation Fallback
     if (!finalUrl) {
       console.log(`[Enrich] Recipe ${idx+1}: Search failed. Triggering AI Generation.`);
+      logTelemetry(fnName, `[Enrich LEVEL 3] Recipe ${idx+1}: Search failed. Triggering AI Generation.`, scraped);
       finalUrl = createAndUploadRecipeImage(recipe.title);
     }
 
     // Final Persistence Check: Upload external URLs to Cloudflare
-    if (finalUrl && !finalUrl.includes('imagedelivery.net')) {
+    // DEFENSIVE CHECK: finalUrl must be a non-empty string and a valid URL
+    if (finalUrl && typeof finalUrl === 'string' && finalUrl.startsWith('http') && !finalUrl.includes('imagedelivery.net')) {
       try {
-        const blob = UrlFetchApp.fetch(finalUrl, { muteHttpExceptions: true }).getBlob();
-        finalUrl = uploadToCloudflareImages(blob);
+        console.log(`[${fnName}] STEP: Persisting external URL to Cloudflare: ${finalUrl}`);
+        logTelemetry(fnName, `STEP: Persisting external URL to Cloudflare: ${finalUrl}`, scraped);
+        const response = UrlFetchApp.fetch(finalUrl, { muteHttpExceptions: true });
+        if (response.getResponseCode() === 200) {
+          finalUrl = uploadToCloudflareImages(response.getBlob());
+        }
       } catch (e) {
-        console.warn(`[Enrich] CF persistence failed for ${finalUrl}. Using raw link.`);
+        console.warn(`[${fnName}] WARNING: CF persistence failed for ${finalUrl}. Error: ${e.message}`);
+        logTelemetry(fnName, "Cloudflare Images API Persistence Failed", { url: finalUrl, error: e });
       }
     }
 
@@ -203,6 +214,7 @@ function uploadToCloudflareImages(rawImageBlob) {
   const startTime = Date.now();
   const fnName = "uploadToCloudflareImages";
   console.log(`[${fnName}] START`);
+  logTelemetry(fnName, 'START');
   
   let rawDriveUrl = "";
   let optimizedDriveUrl = "";
@@ -214,6 +226,7 @@ function uploadToCloudflareImages(rawImageBlob) {
     rawImageBlob.setName(`RAW_${rawImageBlob.getName() || "image.jpg"}`);
     const rawFile = sessionFolder.createFile(rawImageBlob);
     rawDriveUrl = rawFile.getUrl();
+    logTelemetry(fnName, `Session Folder Url: ${CONFIG.SESSION_FOLDER_URL}`);
     logTelemetry(fnName,`STEP: Raw image saved to Drive: ${rawDriveUrl}`);
   } catch (driveErr) {
     console.warn(`[${fnName}] WARNING: Failed to save RAW image to Drive: ${driveErr.message}`);
@@ -223,6 +236,11 @@ function uploadToCloudflareImages(rawImageBlob) {
   // 2. Upload to Cloudflare Images
   const cfEndpoint = CONFIG.CLOUDFLARE_IMAGES_URL;
   const apiToken = CONFIG.CLOUDFLARE_IMAGES_STREAM_TOKEN;
+
+  if (!cfEndpoint) {
+    logTelemetry(fnName, "Missing CONFIG.CLOUDFLARE_IMAGES_URL");
+    throw new Error(`[${fnName}] Missing CONFIG.CLOUDFLARE_IMAGES_URL`);
+  }
 
   const cfOptions = {
     method: "post",
@@ -237,7 +255,8 @@ function uploadToCloudflareImages(rawImageBlob) {
     const cfResponse = UrlFetchApp.fetch(cfEndpoint, cfOptions);
     
     if (cfResponse.getResponseCode() !== 200) {
-      throw new Error(`CF API Error (${cfResponse.getResponseCode()}): ${cfResponse.getContentText()}`);
+      logTelemetry(fnName,`ERROR: Cloudflare Images API Error (${cfResponse.getResponseCode()}): ${cfResponse.getContentText()`);
+      throw new Error(`[${fnName}] Cloudflare Images API Error (${cfResponse.getResponseCode()}): ${cfResponse.getContentText()}`);
     }
 
     const cfData = JSON.parse(cfResponse.getContentText());
@@ -249,7 +268,13 @@ function uploadToCloudflareImages(rawImageBlob) {
 
     // Use the /public variant as the standard "pre-custom-optimization" Cloudflare URL
     cloudflareImageUrl = cfData.result.variants.find(v => v.endsWith("/public")) || cfData.result.variants[0];
-    logTelemetry(fnName, `STEP: Uploaded to Cloudflare: ${cloudflareImageUrl} (+${Date.now() - startTime}ms)`);
+    if (!cloudflareImageUrl) {
+      logTelemetry(fnName, `Cloudflare upload succeeded but no public variant URL was returned.`, cfData);
+      throw new Error(`[${fnName}] Cloudflare upload succeeded but no public variant URL was returned.`);
+    }
+    else {
+      logTelemetry(fnName, `STEP: Uploaded to Cloudflare: ${cloudflareImageUrl} (+${Date.now() - startTime}ms)`);
+    }
 
     // 3. Fetch Optimized Image from Cloudflare and Save to Google Drive
     try {
