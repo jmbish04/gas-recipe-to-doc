@@ -9,7 +9,8 @@
  * @param {Array} messages - Conversation history.
  * @param {boolean} isFallback - Explicitly passed from frontend.
  */
-function chatWithAI_step(messages, isFallback = false) {
+function chatWithAI_step(messages, isFallback = false, clientSessionId) {
+  if (clientSessionId) CONFIG.SESSION_ID = clientSessionId;
   const startTime = Date.now();
   console.log(`[chatWithAI_step] START`);
   logTelemetry(chatWithAI_step, 'Function started', { isFallback: isFallback, messageCount: (messages || []).length });

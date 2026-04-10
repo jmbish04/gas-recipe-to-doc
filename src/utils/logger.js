@@ -74,7 +74,8 @@ function logTelemetry(functionName, errorMessage, errorObject) {
  * Retrieves the paginated history of search and export events for the frontend UI.
  * @returns {string} A JSON serialized array of normalized history objects, sorted newest-first.
  */
-function getHistory() {
+function getHistory(clientSessionId) {
+  if (clientSessionId) CONFIG.SESSION_ID = clientSessionId;
   // Open the centralized logging spreadsheet via the Drive ID. (Hardcoded per requirement)
   const ss = SpreadsheetApp.openById(CONFIG.LOG_SHEET_ID);
 
@@ -232,5 +233,51 @@ function _logTelemetryToSheet_(functionName, errorMessage, errorObject, details,
   } catch (logErr) {
     // Suppress catastrophic failure to prevent telemetry loops from crashing the core logic.
     console.error(`[_logTelemetryToSheet_] Critical logging failure: ${logErr.message}`);
+  }
+}
+
+/**
+ * Retrieves the telemetry log specific to a given session ID.
+ * @param {string} sessionId - The ID of the session to filter by.
+ * @returns {string} A JSON serialized array of telemetry objects.
+ */
+function getSessionTelemetry(sessionId) {
+  if (sessionId) CONFIG.SESSION_ID = sessionId;
+
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.LOG_SHEET_ID);
+    const sheet = ss.getSheetByName(CONFIG.TELEMETRY_SHEET_NAME);
+
+    if (!sheet || sheet.getLastRow() < 2) {
+      return JSON.stringify([]);
+    }
+
+    // Extract a 2D array of all data starting from row 2
+    // Columns: Timestamp | Session ID | Function Name | Status | Error Message | Error Object | Details
+    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 7).getValues();
+
+    const rows = data
+      .filter(function(row) {
+        return row[0] && row[1] === sessionId;
+      })
+      .map(function(row) {
+        return {
+          timestamp: row[0] ? new Date(row[0]).toISOString() : '',
+          sessionId: row[1] || '',
+          functionName: row[2] || '',
+          status: row[3] || '',
+          errorMessage: row[4] || '',
+          errorObject: row[5] || '',
+          details: row[6] || ''
+        };
+      })
+      // Take the last 50 entries and reverse to show newest first
+      .slice(-50)
+      .reverse();
+
+    return JSON.stringify(rows);
+  } catch (err) {
+    console.error(`[getSessionTelemetry] Error fetching telemetry: ${err.message}`);
+    return JSON.stringify([]);
   }
 }

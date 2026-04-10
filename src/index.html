@@ -74,6 +74,10 @@
     // ─── google.script.run Promise wrapper ───────────────────────────────────
     const runScript = (fnName, ...args) => {
       const startTime = Date.now();
+      // Inject sessionId automatically if available and not explicitly skipped
+      if (fnName !== 'initializeSession' && typeof window !== 'undefined' && window.__currentSessionId) {
+        args.push(window.__currentSessionId);
+      }
       console.log(`[runScript] START: ${fnName}`);
       logClientTelemetry(fnName, 'Invoking server function', { argsSnippet: JSON.stringify(args).substring(0, 100) });
 
@@ -529,12 +533,159 @@
       );
     }
 
-    // ─── App (Root) Component ─────────────────────────────────────────────────
+
+    // ─── Telemetry Modal Component ────────────────────────────────────────────
+    function TelemetryModal({ isOpen, onClose, sessionId }) {
+      const [logs, setLogs] = useState([]);
+      const [loading, setLoading] = useState(false);
+      const [error, setError] = useState(null);
+      const [errorsOnly, setErrorsOnly] = useState(false);
+      const [funcFilter, setFuncFilter] = useState('');
+
+      useEffect(() => {
+        if (!isOpen || !sessionId) return;
+
+        setLoading(true);
+        setError(null);
+        logClientTelemetry('TelemetryModal', 'Modal opened', { sessionId });
+
+        runScript('getSessionTelemetry', sessionId)
+          .then(res => {
+            setLogs(JSON.parse(res));
+          })
+          .catch(err => {
+            console.error('[TelemetryModal] Failed to load telemetry', err);
+            setError(err.message || 'Failed to load telemetry data');
+          })
+          .finally(() => {
+            setLoading(false);
+          });
+      }, [isOpen, sessionId]);
+
+      if (!isOpen) return null;
+
+      const filteredLogs = logs.filter(log => {
+        if (errorsOnly && log.status !== 'ERROR') return false;
+        if (funcFilter && !log.functionName.toLowerCase().includes(funcFilter.toLowerCase())) return false;
+        return true;
+      });
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm fade-in">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-xl w-full max-w-4xl max-h-[80vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-zinc-800 shrink-0 bg-zinc-900/50">
+              <div>
+                <h3 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
+                  Session Telemetry
+                  <span className="text-xs font-mono bg-zinc-800 px-2 py-0.5 rounded text-zinc-400 border border-zinc-700">{sessionId}</span>
+                </h3>
+                <p className="text-xs text-zinc-500 mt-1">Real-time backend execution logs for the current session.</p>
+              </div>
+              <button onClick={onClose} className="p-2 text-zinc-400 hover:text-zinc-100 rounded-lg hover:bg-zinc-800 transition-colors">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-4 p-4 border-b border-zinc-800 shrink-0 bg-zinc-900/30">
+              <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={errorsOnly}
+                  onChange={(e) => setErrorsOnly(e.target.checked)}
+                  className="rounded border-zinc-700 bg-zinc-900 text-emerald-600 focus:ring-emerald-600 focus:ring-offset-zinc-950"
+                />
+                Show Errors Only
+              </label>
+
+              <div className="relative flex-1 max-w-xs">
+                <svg className="absolute left-2.5 top-2 h-4 w-4 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                <input
+                  type="text"
+                  placeholder="Filter by function name..."
+                  value={funcFilter}
+                  onChange={(e) => setFuncFilter(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-md py-1.5 pl-9 pr-3 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto p-4 bg-zinc-950/50">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center h-full text-zinc-500 gap-3">
+                  <SpinnerIcon size={24} />
+                  <p className="text-sm">Fetching session telemetry...</p>
+                </div>
+              ) : error ? (
+                <div className="flex flex-col items-center justify-center h-full text-red-400 gap-2">
+                  <p className="text-sm bg-red-950/30 p-3 rounded-lg border border-red-900/50">{error}</p>
+                </div>
+              ) : filteredLogs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-zinc-500 text-sm">
+                  <p>No telemetry logs found matching the criteria.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredLogs.map((log, i) => (
+                    <div key={i} className={`p-3 rounded-lg border text-xs flex flex-col gap-1.5 ${log.status === 'ERROR' ? 'bg-red-950/10 border-red-900/30' : 'bg-zinc-900/50 border-zinc-800'}`}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${log.status === 'ERROR' ? 'bg-red-900/50 text-red-200' : 'bg-emerald-900/50 text-emerald-200'}`}>
+                            {log.status}
+                          </span>
+                          <span className="font-mono text-zinc-300 font-medium">{log.functionName}</span>
+                        </div>
+                        <span className="text-zinc-500 font-mono text-[10px] whitespace-nowrap">
+                          {new Date(log.timestamp).toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })} PST
+                        </span>
+                      </div>
+                      {log.errorMessage && (
+                        <p className={`font-mono mt-1 ${log.status === 'ERROR' ? 'text-red-400' : 'text-zinc-400'}`}>
+                          {log.errorMessage}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-zinc-800 shrink-0 bg-zinc-900/50 flex items-center justify-between">
+              <p className="text-[10px] text-zinc-500 max-w-sm">
+                Use <kbd className="px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-sans">Ctrl+F</kbd> in the Google Sheet to find this specific Session ID since native URL filtering is unsupported.
+              </p>
+              <button
+                onClick={() => window.open('https://docs.google.com/spreadsheets/d/15OZdqdenNGVASN_EjygVuQkpL6ldO_Lk-hDon7aszw4/edit', '_blank')}
+                className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs font-medium rounded-lg transition-colors border border-zinc-700"
+              >
+                Open in Google Sheets
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── App (Root) Component
+ ─────────────────────────────────────────────────
     function App() {
       const [view, setView] = useState('chat');
       const [messages, setMessages] = useState([]);
       const [loading, setLoading] = useState(false);
       const [inputValue, setInputValue] = useState('');
+      const [sessionId, setSessionId] = useState(null);
+      const [telemetryOpen, setTelemetryOpen] = useState(false);
+
+      useEffect(() => {
+        runScript('initializeSession')
+          .then(res => {
+            const data = JSON.parse(res);
+            setSessionId(data.sessionId);
+            window.__currentSessionId = data.sessionId;
+            console.log('[App] Session initialized:', data.sessionId);
+          })
+          .catch(err => console.error('[App] Failed to initialize session:', err));
+      }, []);
 
       const addMessage = useCallback(msg => {
         setMessages(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, ...msg }]);
@@ -670,6 +821,18 @@ const sendMessage = useCallback(async () => {
               </div>
             </div>
 
+            {sessionId && (
+              <div className="hidden md:flex items-center gap-2 ml-auto mr-4">
+                <button
+                  onClick={() => setTelemetryOpen(true)}
+                  className="text-[10px] text-zinc-500 hover:text-emerald-400 font-mono px-2 py-1 rounded bg-zinc-900 border border-zinc-800 hover:border-emerald-900/50 transition-colors"
+                  title="View Session Telemetry"
+                >
+                  Session: {sessionId.split('-')[0]}
+                </button>
+              </div>
+            )}
+
             {/* Tab navigation */}
             <nav className="flex items-center gap-1 bg-zinc-800 rounded-xl p-1">
               {[
@@ -714,6 +877,12 @@ const sendMessage = useCallback(async () => {
               </div>
             )}
           </main>
+
+          <TelemetryModal
+            isOpen={telemetryOpen}
+            onClose={() => setTelemetryOpen(false)}
+            sessionId={sessionId}
+          />
         </div>
       );
     }
